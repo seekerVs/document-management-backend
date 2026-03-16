@@ -1,16 +1,19 @@
-import { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import * as admin from 'firebase-admin';
-import { getFirestore } from '../services/firebase.service';
-import { sendSigningLinkEmail } from '../services/email.service';
-import { ApiResponse, SendSigningLinkRequest } from '../types';
+import { Request, Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import * as admin from "firebase-admin";
+import { getFirestore } from "../services/firebase.service";
+import { sendSigningLinkEmail } from "../services/email.service";
+import { ApiResponse, SendSigningLinkRequest } from "../types";
 
 // src/controllers/signing.controller.ts
 
 // ─── POST /api/signing/send-link ──────────────────────────────────────────────
 // Generates a signing token, stores it in Firestore, sends email to signer
 
-export const sendSigningLink = async (req: Request, res: Response): Promise<void> => {
+export const sendSigningLink = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   const {
     documentId,
     requestId,
@@ -29,39 +32,42 @@ export const sendSigningLink = async (req: Request, res: Response): Promise<void
     expiresAt.setHours(expiresAt.getHours() + 72); // 72 hour expiry
 
     // Store token in Firestore
-    await db.collection('signing_tokens').doc(token).set({
-      token,
-      documentId,
-      requestId,
-      signerEmail: signerEmail.trim().toLowerCase(),
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-      used: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    await db
+      .collection("signing_tokens")
+      .doc(token)
+      .set({
+        token,
+        documentId,
+        requestId,
+        signerEmail: signerEmail.trim().toLowerCase(),
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        used: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
     // Build the signing URL pointing to your Flutter web app
-    const baseUrl = process.env.SIGNING_BASE_URL ?? 'https://your-web-app.com';
+    const baseUrl = process.env.SIGNING_BASE_URL ?? "https://your-web-app.com";
     const signingUrl = `${baseUrl}/sign?token=${token}`;
 
     // Send email
     await sendSigningLinkEmail(
       signerEmail.trim(),
-      signerName ?? '',
+      signerName ?? "",
       requesterName,
       documentName,
-      signingUrl
+      signingUrl,
     );
 
     res.status(200).json({
       success: true,
-      message: 'Signing link sent successfully.',
+      message: "Signing link sent successfully.",
       data: { token },
     } as ApiResponse<{ token: string }>);
   } catch (error) {
-    console.error('[sendSigningLink] Error:', error);
+    console.error("[sendSigningLink] Error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to send signing link.',
+      message: "Failed to send signing link.",
     } as ApiResponse);
   }
 };
@@ -69,25 +75,28 @@ export const sendSigningLink = async (req: Request, res: Response): Promise<void
 // ─── GET /api/signing/validate-token ─────────────────────────────────────────
 // Called by Flutter web app on load to validate the token in the URL
 
-export const validateToken = async (req: Request, res: Response): Promise<void> => {
+export const validateToken = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   const { token } = req.query;
 
-  if (!token || typeof token !== 'string') {
+  if (!token || typeof token !== "string") {
     res.status(400).json({
       success: false,
-      message: 'Token is required.',
+      message: "Token is required.",
     } as ApiResponse);
     return;
   }
 
   try {
     const db = getFirestore();
-    const doc = await db.collection('signing_tokens').doc(token).get();
+    const doc = await db.collection("signing_tokens").doc(token).get();
 
     if (!doc.exists) {
       res.status(404).json({
         success: false,
-        message: 'Invalid signing link.',
+        message: "Invalid signing link.",
       } as ApiResponse);
       return;
     }
@@ -97,7 +106,7 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
     if (data.used) {
       res.status(400).json({
         success: false,
-        message: 'This signing link has already been used.',
+        message: "This signing link has already been used.",
       } as ApiResponse);
       return;
     }
@@ -106,25 +115,25 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
     if (new Date() > expiresAt) {
       res.status(400).json({
         success: false,
-        message: 'This signing link has expired.',
+        message: "This signing link has expired.",
       } as ApiResponse);
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: 'Token is valid.',
+      message: "Token is valid.",
       data: {
         documentId: data.documentId,
         requestId: data.requestId,
         signerEmail: data.signerEmail,
       },
-    } as ApiResponse);
+    } as ApiResponse<{ documentId: any; requestId: any; signerEmail: any }>);
   } catch (error) {
-    console.error('[validateToken] Error:', error);
+    console.error("[validateToken] Error:", error);
     res.status(500).json({
       success: false,
-      message: 'Token validation failed.',
+      message: "Token validation failed.",
     } as ApiResponse);
   }
 };

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { ApiResponse } from "../Types";
+import { ApiResponse } from "../types";
 
 // src/middleware/auth.middleware.ts
 //

@@ -1,10 +1,10 @@
 import { Router } from "express";
 
-import { validateBody } from "../Middleware/validate.middleware";
+import { validateBody } from "../middleware/validate.middleware";
 import {
   sendSigningLink,
   validateToken,
-} from "../Controllers/signing.controller";
+} from "../controllers/signing.controller";
 
 // src/routes/signing.routes.ts
 

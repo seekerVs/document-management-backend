@@ -2,10 +2,10 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import { validateApiKey } from "./middleware/auth.middleware";
+import authRoutes from "./routes/auth.routes";
+import signingRoutes from "./routes/signing.routes";
 import { initFirebase } from "./services/firebase.service";
-import { validateApiKey } from "./Middleware/auth.middleware";
-import authRoutes from "./Routes/auth.routes";
-import signingRoutes from "./Routes/signing.routes";
 
 // src/index.ts
 
