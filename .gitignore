@@ -3,3 +3,4 @@ dist/
 .env
 firebase-service-account.json
 *.log
+render.yaml
