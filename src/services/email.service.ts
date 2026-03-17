@@ -1,37 +1,23 @@
-import nodemailer from 'nodemailer';
+import { Resend } from "resend";
 
-// src/services/email.service.ts
+// src/Services/email.service.ts
 
-let transporter: nodemailer.Transporter | null = null;
-
-const getTransporter = (): nodemailer.Transporter => {
-  if (transporter) return transporter;
-
-  transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
-
-  return transporter;
-};
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 // ─── OTP email ───────────────────────────────────────────────────────────────
 
 export const sendOtpEmail = async (
   toEmail: string,
   otpCode: string,
-  expiryMinutes: number
+  expiryMinutes: number,
 ): Promise<void> => {
-  const fromName = process.env.EMAIL_FROM_NAME ?? 'Document Management';
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? process.env.GMAIL_USER;
+  const fromName = process.env.EMAIL_FROM_NAME ?? "Document Management";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev";
 
-  await getTransporter().sendMail({
-    from: `"${fromName}" <${fromAddress}>`,
+  await getResend().emails.send({
+    from: `${fromName} <${fromAddress}>`,
     to: toEmail,
-    subject: 'Your password reset code',
+    subject: "Your password reset code",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
         <h2 style="color: #0066FF;">Password Reset</h2>
@@ -55,7 +41,6 @@ export const sendOtpEmail = async (
         </p>
       </div>
     `,
-    text: `Your password reset code is: ${otpCode}. It expires in ${expiryMinutes} minutes.`,
   });
 };
 
@@ -66,19 +51,19 @@ export const sendSigningLinkEmail = async (
   signerName: string,
   requesterName: string,
   documentName: string,
-  signingUrl: string
+  signingUrl: string,
 ): Promise<void> => {
-  const fromName = process.env.EMAIL_FROM_NAME ?? 'Document Management';
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? process.env.GMAIL_USER;
+  const fromName = process.env.EMAIL_FROM_NAME ?? "Document Management";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev";
 
-  await getTransporter().sendMail({
-    from: `"${fromName}" <${fromAddress}>`,
+  await getResend().emails.send({
+    from: `${fromName} <${fromAddress}>`,
     to: toEmail,
     subject: `${requesterName} requested your signature`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
         <h2 style="color: #0066FF;">Signature Requested</h2>
-        <p>Hi ${signerName || 'there'},</p>
+        <p>Hi ${signerName || "there"},</p>
         <p><strong>${requesterName}</strong> has requested your signature on:</p>
         <p style="
           background: #f4f4f4;
@@ -101,6 +86,5 @@ export const sendSigningLinkEmail = async (
         </p>
       </div>
     `,
-    text: `${requesterName} requested your signature on "${documentName}". Sign here: ${signingUrl}`,
   });
 };
