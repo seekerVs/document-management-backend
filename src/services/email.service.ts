@@ -1,29 +1,39 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-// src/Services/email.service.ts
+// 📁 src/Services/email.service.ts
+//
 
-const getResend = () => new Resend(process.env.RESEND_API_KEY);
+const createTransporter = () =>
+  nodemailer.createTransport({
+    host: process.env.BREVO_SMTP_HOST ?? "smtp-relay.brevo.com",
+    port: Number(process.env.BREVO_SMTP_PORT ?? 587),
+    secure: false, // TLS via STARTTLS
+    auth: {
+      user: process.env.BREVO_SMTP_USER ?? "",
+      pass: process.env.BREVO_SMTP_PASS ?? "",
+    },
+  });
 
-// ─── OTP email ───────────────────────────────────────────────────────────────
+const fromAddress = () =>
+  `"${process.env.EMAIL_FROM_NAME ?? "Scrivener"}" <${process.env.EMAIL_FROM_ADDRESS ?? process.env.BREVO_SMTP_USER}>`;
+
+// ─── OTP email ────────────────────────────────────────────────────────────────
 
 export const sendOtpEmail = async (
   toEmail: string,
   otpCode: string,
   expiryMinutes: number,
 ): Promise<void> => {
-  const fromName = process.env.EMAIL_FROM_NAME ?? "Document Management";
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev";
-
-  await getResend().emails.send({
-    from: `${fromName} <${fromAddress}>`,
+  await createTransporter().sendMail({
+    from: fromAddress(),
     to: toEmail,
     subject: "Your password reset code",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #0066FF;">Password Reset</h2>
+        <h2 style="color: #1A73E8;">Password Reset</h2>
         <p>Use the code below to reset your password. It expires in <strong>${expiryMinutes} minutes</strong>.</p>
         <div style="
-          background: #f4f4f4;
+          background: #ECF1F7;
           border-radius: 12px;
           padding: 24px;
           text-align: center;
@@ -33,10 +43,10 @@ export const sendOtpEmail = async (
             font-size: 36px;
             font-weight: bold;
             letter-spacing: 12px;
-            color: #0066FF;
+            color: #1A73E8;
           ">${otpCode}</span>
         </div>
-        <p style="color: #666; font-size: 14px;">
+        <p style="color: #5E788D; font-size: 14px;">
           If you did not request a password reset, please ignore this email.
         </p>
       </div>
@@ -53,27 +63,25 @@ export const sendSigningLinkEmail = async (
   documentName: string,
   signingUrl: string,
 ): Promise<void> => {
-  const fromName = process.env.EMAIL_FROM_NAME ?? "Document Management";
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev";
-
-  await getResend().emails.send({
-    from: `${fromName} <${fromAddress}>`,
+  await createTransporter().sendMail({
+    from: fromAddress(),
     to: toEmail,
     subject: `${requesterName} requested your signature`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #0066FF;">Signature Requested</h2>
+        <h2 style="color: #1A73E8;">Signature Requested</h2>
         <p>Hi ${signerName || "there"},</p>
         <p><strong>${requesterName}</strong> has requested your signature on:</p>
         <p style="
-          background: #f4f4f4;
+          background: #ECF1F7;
           border-radius: 8px;
           padding: 12px 16px;
           font-weight: bold;
+          color: #141C23;
         ">${documentName}</p>
         <a href="${signingUrl}" style="
           display: inline-block;
-          background: #0066FF;
+          background: #1A73E8;
           color: white;
           text-decoration: none;
           padding: 14px 28px;
@@ -81,7 +89,7 @@ export const sendSigningLinkEmail = async (
           font-size: 16px;
           margin: 24px 0;
         ">Review &amp; Sign</a>
-        <p style="color: #666; font-size: 13px;">
+        <p style="color: #5E788D; font-size: 13px;">
           This link expires in 72 hours. No account required.
         </p>
       </div>
