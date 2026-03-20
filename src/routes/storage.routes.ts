@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
+import path from "path";
 import {
   deleteFile,
   signedUrl,
@@ -11,10 +12,18 @@ const router = Router();
 // Store file in memory buffer — no temp files on disk
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
-    if (allowed.includes(file.mimetype)) {
+    const allowedMimes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/jpg",
+    ];
+    const allowedExts = [".pdf", ".jpg", ".jpeg", ".png"];
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
       cb(null, true);
     } else {
       cb(new Error("File type not allowed. Only PDF and images are accepted."));
