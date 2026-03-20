@@ -41,3 +41,12 @@ export interface SendSigningLinkRequest {
   signingToken: string;
   signingUrl: string;
 }
+
+export interface UploadFileResponse {
+  storagePath: string;
+  fileSizeBytes: number;
+}
+
+export interface SignedUrlResponse {
+  url: string;
+}

@@ -6,6 +6,7 @@ import { validateApiKey } from "./middleware/auth.middleware";
 import authRoutes from "./routes/auth.routes";
 import signingRoutes from "./routes/signing.routes";
 import { initFirebase } from "./services/firebase.service";
+import storageRoutes from "./routes/storage.routes";
 
 // src/index.ts
 
@@ -15,7 +16,7 @@ const PORT = process.env.PORT ?? 3000;
 initFirebase();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-
+app.use("/api/storage", storageRoutes);
 app.use(helmet());
 app.set("trust proxy", 1);
 
