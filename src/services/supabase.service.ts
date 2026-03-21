@@ -1,13 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 // Supabase client using service role key — server-side only
 const getClient = () =>
   createClient(
-    process.env.SUPABASE_URL ?? '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+    process.env.SUPABASE_URL ?? "",
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   );
 
-const BUCKET = 'documents';
+const BUCKET = "documents";
 
 // Upload a file buffer to Supabase Storage
 // storagePath: e.g. "uid123/filename.pdf"
@@ -48,9 +48,7 @@ export const getSignedUrl = async (storagePath: string): Promise<string> => {
 export const deleteFromStorage = async (storagePath: string): Promise<void> => {
   const client = getClient();
 
-  const { error } = await client.storage
-    .from(BUCKET)
-    .remove([storagePath]);
+  const { error } = await client.storage.from(BUCKET).remove([storagePath]);
 
   if (error) throw new Error(`Storage delete failed: ${error.message}`);
 };
