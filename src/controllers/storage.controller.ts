@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import { ApiResponse } from "../types";
 import {
   deleteFromStorage,
   getSignedUrl,
   uploadToStorage,
 } from "../services/supabase.service";
+import { ApiResponse } from "../types";
 
 // POST /api/storage/upload
 export const uploadFile = async (
@@ -68,7 +68,7 @@ export const signedUrl = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// DELETE /api/storage/delete
+// POST /api/storage/delete
 export const deleteFile = async (
   req: Request,
   res: Response,

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import multer from "multer";
 import path from "path";
 import {
@@ -9,7 +9,6 @@ import {
 
 const router = Router();
 
-// Store file in memory buffer — no temp files on disk
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
@@ -27,6 +26,7 @@ const upload = multer({
 
 router.post("/upload", upload.single("file"), uploadFile);
 router.get("/signed-url", signedUrl);
-router.delete("/delete", deleteFile);
+// express.json() applied explicitly — multer doesn't parse JSON bodies
+router.post("/delete", express.json(), deleteFile);
 
 export default router;
