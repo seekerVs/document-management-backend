@@ -2,14 +2,140 @@ import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import * as admin from "firebase-admin";
 import { getFirestore } from "../services/firebase.service";
-import { sendSigningLinkEmail } from "../services/email.service";
-import { ApiResponse, SendSigningLinkRequest } from "../types";
+import { sendCopyEmail, sendSigningLinkEmail } from "../services/email.service";
+import { NotificationRepository } from "../services/notification.service";
+import {
+  ApiResponse,
+  CreateSignatureRequestBody,
+  SendSigningLinkRequest,
+} from "../types";
 
-// src/controllers/signing.controller.ts
+const TOKEN_EXPIRY_HOURS = 72;
+const BASE_URL = process.env.SIGNING_BASE_URL ?? "https://your-web-app.com";
+const notifRepo = new NotificationRepository();
 
-// ─── POST /api/signing/send-link ──────────────────────────────────────────────
-// Generates a signing token, stores it in Firestore, sends email to signer
+// Build guest signing URL from token
+const buildSigningUrl = (token: string): string =>
+  `${BASE_URL}/sign?token=${token}`;
 
+// POST /api/signing/create-request
+// Creates Firestore request, generates tokens, sends emails to all signers
+export const createSignatureRequest = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const {
+    requestedByUid,
+    requesterName,
+    documentId,
+    documentName,
+    documentUrl,
+    storagePath,
+    signers,
+    signingOrderEnabled,
+  } = req.body as CreateSignatureRequestBody;
+
+  try {
+    const db = getFirestore();
+    const requestId = uuidv4();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS);
+
+    // Build signer list with tokens for needsToSign signers
+    const signersWithTokens = signers.map((signer) => {
+      if (signer.role !== "needsToSign") {
+        return {
+          ...signer,
+          status: "pending",
+          signingToken: null,
+          tokenExpiry: null,
+          tokenUsed: false,
+        };
+      }
+      const token = uuidv4();
+      return {
+        ...signer,
+        status: "pending",
+        signingToken: token,
+        tokenExpiry: admin.firestore.Timestamp.fromDate(expiresAt),
+        tokenUsed: false,
+        signedAt: null,
+        signatureImageUrl: null,
+        ipAddress: null,
+      };
+    });
+
+    // Write signature request to Firestore
+    await db.collection("signature_requests").doc(requestId).set({
+      requestId,
+      requestedByUid,
+      documentId,
+      documentName,
+      documentUrl,
+      storagePath,
+      status: "pending",
+      signingOrderEnabled,
+      signers: signersWithTokens,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+    });
+
+    // Store tokens in signing_tokens collection and send emails
+    const emailPromises = signersWithTokens.map(async (signer) => {
+      if (signer.role === "needsToSign" && signer.signingToken) {
+        // Store token for guest web validation
+        await db
+          .collection("signing_tokens")
+          .doc(signer.signingToken)
+          .set({
+            token: signer.signingToken,
+            documentId,
+            requestId,
+            signerEmail: signer.signerEmail.trim().toLowerCase(),
+            expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+            used: false,
+            createdAt: now,
+          });
+
+        // Send signing link email
+        await sendSigningLinkEmail(
+          signer.signerEmail,
+          signer.signerName,
+          requesterName,
+          documentName,
+          buildSigningUrl(signer.signingToken),
+        );
+      } else if (signer.role === "receivesACopy") {
+        // Send copy notification — no token needed
+        await sendCopyEmail(
+          signer.signerEmail,
+          signer.signerName,
+          requesterName,
+          documentName,
+        );
+      }
+    });
+
+    await Promise.all(emailPromises);
+
+    res.status(200).json({
+      success: true,
+      message: "Signature request created and emails sent.",
+      data: { requestId },
+    } as ApiResponse<{ requestId: string }>);
+  } catch (error) {
+    console.error("[createSignatureRequest] Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create signature request.",
+    } as ApiResponse);
+  }
+};
+
+// POST /api/signing/send-link
+// Sends a single signing link — used for resending to a specific signer
 export const sendSigningLink = async (
   req: Request,
   res: Response,
@@ -25,13 +151,10 @@ export const sendSigningLink = async (
 
   try {
     const db = getFirestore();
-
-    // Generate a secure one-time token
     const token = uuidv4();
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 72); // 72 hour expiry
+    expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS);
 
-    // Store token in Firestore
     await db
       .collection("signing_tokens")
       .doc(token)
@@ -45,17 +168,12 @@ export const sendSigningLink = async (
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-    // Build the signing URL pointing to your Flutter web app
-    const baseUrl = process.env.SIGNING_BASE_URL ?? "https://your-web-app.com";
-    const signingUrl = `${baseUrl}/sign?token=${token}`;
-
-    // Send email
     await sendSigningLinkEmail(
       signerEmail.trim(),
       signerName ?? "",
       requesterName,
       documentName,
-      signingUrl,
+      buildSigningUrl(token),
     );
 
     res.status(200).json({
@@ -72,9 +190,8 @@ export const sendSigningLink = async (
   }
 };
 
-// ─── GET /api/signing/validate-token ─────────────────────────────────────────
-// Called by Flutter web app on load to validate the token in the URL
-
+// GET /api/signing/validate-token?token=xxx
+// Called by Flutter web to validate token on page load
 export const validateToken = async (
   req: Request,
   res: Response,
@@ -111,8 +228,7 @@ export const validateToken = async (
       return;
     }
 
-    const expiresAt = data.expiresAt.toDate() as Date;
-    if (new Date() > expiresAt) {
+    if (new Date() > data.expiresAt.toDate()) {
       res.status(400).json({
         success: false,
         message: "This signing link has expired.",
@@ -128,12 +244,79 @@ export const validateToken = async (
         requestId: data.requestId,
         signerEmail: data.signerEmail,
       },
-    } as ApiResponse<{ documentId: any; requestId: any; signerEmail: any }>);
+    } as ApiResponse<{
+      documentId: string;
+      requestId: string;
+      signerEmail: string;
+    }>);
   } catch (error) {
     console.error("[validateToken] Error:", error);
     res.status(500).json({
       success: false,
       message: "Token validation failed.",
+    } as ApiResponse);
+  }
+};
+
+// POST /api/signing/expire-requests — called by Render cron job daily
+export const expireRequests = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const db = getFirestore();
+    const now = new Date();
+
+    const snap = await db
+      .collection("signature_requests")
+      .where("status", "in", ["pending", "inProgress"])
+      .get();
+
+    let expiredCount = 0;
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const signers: any[] = data.signers ?? [];
+
+      // Check if any pending signer token is expired
+      const hasExpiredToken = signers.some(
+        (s) =>
+          s.role === "needsToSign" &&
+          s.status === "pending" &&
+          s.tokenExpiry &&
+          s.tokenExpiry.toDate() < now,
+      );
+
+      if (!hasExpiredToken) continue;
+
+      await doc.ref.update({
+        status: "expired",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Notify owner
+      await notifRepo.createNotification({
+        recipientUid: data.requestedByUid,
+        type: "tokenExpired",
+        title: "Signing request expired",
+        body: `The signing request for ${data.documentName} has expired.`,
+        requestId: doc.id,
+        documentName: data.documentName,
+      });
+
+      expiredCount++;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${expiredCount} request(s) expired.`,
+      data: { expiredCount },
+    } as ApiResponse<{ expiredCount: number }>);
+  } catch (error) {
+    console.error("[expireRequests] Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process expired requests.",
     } as ApiResponse);
   }
 };

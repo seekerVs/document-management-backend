@@ -1,14 +1,28 @@
 import { Router } from "express";
-
 import { validateBody } from "../middleware/validate.middleware";
 import {
+  createSignatureRequest,
+  expireRequests,
   sendSigningLink,
   validateToken,
 } from "../controllers/signing.controller";
 
-// src/routes/signing.routes.ts
-
 const router = Router();
+
+// POST /api/signing/create-request
+router.post(
+  "/create-request",
+  validateBody([
+    "requestedByUid",
+    "requesterName",
+    "documentId",
+    "documentName",
+    "documentUrl",
+    "storagePath",
+    "signers",
+  ]),
+  createSignatureRequest,
+);
 
 // POST /api/signing/send-link
 router.post(
@@ -22,6 +36,9 @@ router.post(
   ]),
   sendSigningLink,
 );
+
+// POST /api/signing/expire-requests — called by Render cron job
+router.post("/expire-requests", expireRequests);
 
 // GET /api/signing/validate-token?token=xxx
 router.get("/validate-token", validateToken);

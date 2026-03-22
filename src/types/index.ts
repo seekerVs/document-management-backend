@@ -50,3 +50,36 @@ export interface UploadFileResponse {
 export interface SignedUrlResponse {
   url: string;
 }
+
+// Signature field placed on PDF
+export interface SignatureFieldPayload {
+  fieldId: string;
+  type: "signature" | "initials" | "dateSigned" | "textbox";
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  value?: string;
+}
+
+// Single signer in the create request payload
+export interface SignerPayload {
+  signerEmail: string;
+  signerName: string;
+  order: number;
+  role: "needsToSign" | "receivesACopy";
+  fields: SignatureFieldPayload[];
+}
+
+// POST /api/signing/create-request body
+export interface CreateSignatureRequestBody {
+  requestedByUid: string;
+  requesterName: string;
+  documentId: string;
+  documentName: string;
+  documentUrl: string;
+  storagePath: string;
+  signers: SignerPayload[];
+  signingOrderEnabled: boolean;
+}
