@@ -67,20 +67,25 @@ export const createSignatureRequest = async (
     });
 
     // Write signature request to Firestore
-    await db.collection("signature_requests").doc(requestId).set({
-      requestId,
-      requestedByUid,
-      documentId,
-      documentName,
-      documentUrl,
-      storagePath,
-      status: "pending",
-      signingOrderEnabled,
-      signers: signersWithTokens,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-    });
+    // signerEmails is a flat array for efficient arrayContains queries
+    await db
+      .collection("signature_requests")
+      .doc(requestId)
+      .set({
+        requestId,
+        requestedByUid,
+        documentId,
+        documentName,
+        documentUrl,
+        storagePath,
+        status: "pending",
+        signingOrderEnabled,
+        signers: signersWithTokens,
+        signerEmails: signers.map((s) => s.signerEmail.trim().toLowerCase()),
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null,
+      });
 
     // Store tokens in signing_tokens collection and send emails
     const emailPromises = signersWithTokens.map(async (signer) => {
