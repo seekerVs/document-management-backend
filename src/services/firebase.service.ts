@@ -8,17 +8,7 @@ let initialized = false;
 let resolvedStorageBucket = "";
 
 const resolveStorageBucket = (projectId?: string): string => {
-  const fromEnv = (process.env.FIREBASE_STORAGE_BUCKET ?? "").trim();
-  if (fromEnv) return fromEnv;
-
-  if (projectId) {
-    // Firebase default bucket naming for most projects.
-    return `${projectId}.appspot.com`;
-  }
-
-  throw new Error(
-    "Firebase storage bucket is not configured. Set FIREBASE_STORAGE_BUCKET.",
-  );
+  return ""; // Not using Firebase Storage
 };
 
 export const initFirebase = (): void => {
@@ -43,12 +33,10 @@ export const initFirebase = (): void => {
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    storageBucket: resolvedStorageBucket,
   });
 
   initialized = true;
   console.log("✅ Firebase Admin SDK initialized");
-  console.log(`🪣 Firebase Storage bucket: ${resolvedStorageBucket}`);
 };
 
 export const getFirestore = (): admin.firestore.Firestore => {
@@ -60,9 +48,5 @@ export const getAuth = (): admin.auth.Auth => {
 };
 
 export const getStorageBucketName = (): string => {
-  if (!initialized || !resolvedStorageBucket) {
-    throw new Error("Firebase is not initialized. Call initFirebase() first.");
-  }
-
-  return resolvedStorageBucket;
+  return "";
 };
