@@ -16,27 +16,34 @@ const PORT = process.env.PORT ?? 3000;
 
 initFirebase();
 
-const configuredOrigins = (process.env.ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
-
-const fallbackOrigins = ["https://document-management-syst-fdbc1.web.app"];
-const allowedOrigins =
-  configuredOrigins.length > 0 ? configuredOrigins : fallbackOrigins;
+const getAllowedOrigins = () => {
+  const configured = (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  return configured.length > 0
+    ? configured
+    : ["https://document-management-syst-fdbc1.web.app"];
+};
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. mobile apps, Postman)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-      return;
-    }
+    const list = getAllowedOrigins();
 
-    callback(new Error(`CORS: Origin ${origin} not allowed`));
+    // Log the incoming origin for debugging
+    console.log(`[CORS Request] Origin: ${origin || "No Origin (likely local/mobile)"}`);
+    console.log(`[CORS Check] Allowed List: ${list.join(", ")}`);
+
+    if (!origin || list.includes(origin) || list.includes("*")) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS Blocked] Origin "${origin}" not in allowed list.`);
+      callback(null, false); // Block without throwing to keep preflight headers visible
+    }
   },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "x-api-key", "Authorization"],
+  credentials: true,
 };
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
