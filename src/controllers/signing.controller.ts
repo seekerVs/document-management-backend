@@ -10,6 +10,7 @@ import {
   CreateSignatureRequestBody,
   SendSigningLinkRequest,
 } from "../types";
+import { downloadFromStorage } from "../services/supabase.service";
 
 const TOKEN_EXPIRY_HOURS = 72;
 const BASE_URL = process.env.SIGNING_BASE_URL ?? "https://your-web-app.com";
@@ -434,21 +435,9 @@ export const getGuestDocumentBytes = async (
     const requestData = requestDoc.data()!;
     console.log(`[DocumentBytes] Storage Path: ${requestData.storagePath}`);
     
-    // Fetch from Firebase Storage
-    const bucketName = getStorageBucketName();
-    console.log(`[DocumentBytes] Using bucket: ${bucketName}`);
-    const bucket = admin.storage().bucket(bucketName);
-    const file = bucket.file(requestData.storagePath);
-    
-    const [exists] = await file.exists();
-    if (!exists) {
-      console.error(`[DocumentBytes] File NOT found in storage: ${requestData.storagePath}`);
-      res.status(404).json({ success: false, message: "File not found in storage." });
-      return;
-    }
-
-    console.log(`[DocumentBytes] Downloading file...`);
-    const [buffer] = await file.download();
+    // Fetch from Supabase Storage (FIXED: previously used Firebase Storage)
+    console.log(`[DocumentBytes] Downloading from Supabase...`);
+    const buffer = await downloadFromStorage(requestData.storagePath);
     
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${requestData.documentName}"`);

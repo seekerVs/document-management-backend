@@ -44,6 +44,25 @@ export const getSignedUrl = async (storagePath: string): Promise<string> => {
   return data.signedUrl;
 };
 
+// Download a file buffer from storage
+export const downloadFromStorage = async (
+  storagePath: string,
+): Promise<Buffer> => {
+  const client = getClient();
+
+  const { data, error } = await client.storage
+    .from(BUCKET)
+    .download(storagePath);
+
+  if (error || !data) {
+    throw new Error(`Storage download failed: ${error?.message}`);
+  }
+
+  // Convert Blob to Buffer
+  const arrayBuffer = await data.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+};
+
 // Delete a file from storage
 export const deleteFromStorage = async (storagePath: string): Promise<void> => {
   const client = getClient();
