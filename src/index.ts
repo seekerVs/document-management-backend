@@ -9,8 +9,6 @@ import guestRoutes from "./routes/guest.routes";
 import { initFirebase } from "./services/firebase.service";
 import storageRoutes from "./routes/storage.routes";
 
-// src/index.ts
-
 const app = express();
 const PORT = process.env.PORT ?? 3000;
 
@@ -21,22 +19,31 @@ const getAllowedOrigins = () => {
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean);
-  return configured.length > 0
-    ? configured
-    : ["https://document-management-syst-fdbc1.web.app"];
+
+  if (configured.length === 0) {
+    throw new Error(
+      "ALLOWED_ORIGINS is required. Set one or more comma-separated origins.",
+    );
+  }
+
+  return configured;
 };
+
+const allowedOrigins = getAllowedOrigins();
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    const list = getAllowedOrigins();
-
     // Log the incoming origin for debugging
     console.log(
       `[CORS Request] Origin: ${origin || "No Origin (likely local/mobile)"}`,
     );
-    console.log(`[CORS Check] Allowed List: ${list.join(", ")}`);
+    console.log(`[CORS Check] Allowed List: ${allowedOrigins.join(", ")}`);
 
-    if (!origin || list.includes(origin) || list.includes("*")) {
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      allowedOrigins.includes("*")
+    ) {
       callback(null, true);
     } else {
       console.warn(`[CORS Blocked] Origin "${origin}" not in allowed list.`);

@@ -4,14 +4,14 @@ Express + TypeScript backend for the Document Management System.
 
 ## Endpoints
 
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/health` | Health check |
-| POST | `/api/auth/send-otp` | Send OTP to email for password reset |
-| POST | `/api/auth/verify-otp` | Verify OTP code |
-| POST | `/api/auth/reset-password` | Reset password with verified OTP |
-| POST | `/api/signing/send-link` | Send signing link email to guest signer |
-| GET | `/api/signing/validate-token?token=xxx` | Validate a signing token |
+| Method | Route                                   | Description                             |
+| ------ | --------------------------------------- | --------------------------------------- |
+| GET    | `/health`                               | Health check                            |
+| POST   | `/api/auth/send-otp`                    | Send OTP to email for password reset    |
+| POST   | `/api/auth/verify-otp`                  | Verify OTP code                         |
+| POST   | `/api/auth/reset-password`              | Reset password with verified OTP        |
+| POST   | `/api/signing/send-link`                | Send signing link email to guest signer |
+| GET    | `/api/signing/validate-token?token=xxx` | Validate a signing token                |
 
 All `/api/*` routes require the `x-api-key` header.
 
@@ -47,6 +47,9 @@ npm run dev
 2. Go to [render.com](https://render.com) → New → Web Service
 3. Connect your GitHub repo
 4. Set environment variables in the Render dashboard
+
+- Include `FIREBASE_STORAGE_BUCKET` (for example: `your-project-id.appspot.com`)
+
 5. For `firebase-service-account.json`: paste the JSON content as an
    environment variable `FIREBASE_SERVICE_ACCOUNT_JSON` and update
    `firebase.service.ts` to read from it (see note below)

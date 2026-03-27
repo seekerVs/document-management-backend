@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import * as admin from "firebase-admin";
 import { getFirestore } from "../services/firebase.service";
+import { getStorageBucketName } from "../services/firebase.service";
 import { sendCopyEmail, sendSigningLinkEmail } from "../services/email.service";
 import { NotificationRepository } from "../services/notification.service";
 import {
@@ -430,7 +431,7 @@ export const getGuestDocumentBytes = async (
     const requestData = requestDoc.data()!;
 
     // Fetch from Firebase Storage
-    const bucket = admin.storage().bucket();
+    const bucket = admin.storage().bucket(getStorageBucketName());
     const file = bucket.file(requestData.storagePath);
 
     const [exists] = await file.exists();
