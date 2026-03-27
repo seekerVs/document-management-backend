@@ -410,51 +410,52 @@ export const getGuestDocumentBytes = async (
 
   try {
     const db = getFirestore();
+    console.log(`[DocumentBytes] Fetching for token: ${token}`);
+    
     const tokenDoc = await db.collection("signing_tokens").doc(token).get();
 
     if (!tokenDoc.exists) {
+      console.warn(`[DocumentBytes] Token not found: ${token}`);
       res.status(404).json({ success: false, message: "Invalid token." });
       return;
     }
 
     const tokenData = tokenDoc.data()!;
-    const requestDoc = await db
-      .collection("signature_requests")
-      .doc(tokenData.requestId)
-      .get();
-
+    console.log(`[DocumentBytes] Token valid. Request ID: ${tokenData.requestId}`);
+    
+    const requestDoc = await db.collection("signature_requests").doc(tokenData.requestId).get();
+    
     if (!requestDoc.exists) {
+      console.warn(`[DocumentBytes] Signature request not found: ${tokenData.requestId}`);
       res.status(404).json({ success: false, message: "Request not found." });
       return;
     }
 
     const requestData = requestDoc.data()!;
-
+    console.log(`[DocumentBytes] Storage Path: ${requestData.storagePath}`);
+    
     // Fetch from Firebase Storage
-    const bucket = admin.storage().bucket(getStorageBucketName());
+    const bucketName = getStorageBucketName();
+    console.log(`[DocumentBytes] Using bucket: ${bucketName}`);
+    const bucket = admin.storage().bucket(bucketName);
     const file = bucket.file(requestData.storagePath);
-
+    
     const [exists] = await file.exists();
     if (!exists) {
-      res
-        .status(404)
-        .json({ success: false, message: "File not found in storage." });
+      console.error(`[DocumentBytes] File NOT found in storage: ${requestData.storagePath}`);
+      res.status(404).json({ success: false, message: "File not found in storage." });
       return;
     }
 
+    console.log(`[DocumentBytes] Downloading file...`);
     const [buffer] = await file.download();
-
+    
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${requestData.documentName}"`,
-    );
+    res.setHeader("Content-Disposition", `inline; filename="${requestData.documentName}"`);
     res.send(buffer);
   } catch (error) {
-    console.error("[getGuestDocumentBytes] Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch document." });
+    console.error(`[DocumentBytes] Error:`, error);
+    res.status(500).json({ success: false, message: "Failed to fetch document." });
   }
 };
 
