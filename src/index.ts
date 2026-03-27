@@ -16,29 +16,35 @@ const PORT = process.env.PORT ?? 3000;
 
 initFirebase();
 
+const configuredOrigins = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const fallbackOrigins = ["https://document-management-syst-fdbc1.web.app"];
+const allowedOrigins =
+  configuredOrigins.length > 0 ? configuredOrigins : fallbackOrigins;
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, Postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS: Origin ${origin} not allowed`));
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "x-api-key", "Authorization"],
+};
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use("/api/storage", storageRoutes);
 app.use(helmet());
 app.set("trust proxy", 1);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      const allowed = (process.env.ALLOWED_ORIGINS ?? "")
-        .split(",")
-        .map((o) => o.trim());
-
-      // Allow requests with no origin (e.g. mobile apps, Postman)
-      if (!origin || allowed.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS: Origin ${origin} not allowed`));
-      }
-    },
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "x-api-key"],
-  }),
-);
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.use(express.json());
 
@@ -49,6 +55,7 @@ app.get("/health", (_req, res) => {
 
 // ─── Public Guest Routes (No API Key) ───────────────────────────────────────
 app.use("/api/v1/guest", guestRoutes);
+app.use("/api/storage", storageRoutes);
 
 // ─── API routes (all require x-api-key header) ───────────────────────────────
 app.use("/api", validateApiKey);
