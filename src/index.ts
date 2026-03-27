@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { validateApiKey } from "./middleware/auth.middleware";
 import authRoutes from "./routes/auth.routes";
 import signingRoutes from "./routes/signing.routes";
+import guestRoutes from "./routes/guest.routes";
 import { initFirebase } from "./services/firebase.service";
 import storageRoutes from "./routes/storage.routes";
 
@@ -45,6 +46,9 @@ app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// ─── Public Guest Routes (No API Key) ───────────────────────────────────────
+app.use("/api/v1/guest", guestRoutes);
 
 // ─── API routes (all require x-api-key header) ───────────────────────────────
 app.use("/api", validateApiKey);

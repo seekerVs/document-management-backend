@@ -325,3 +325,191 @@ export const expireRequests = async (
     } as ApiResponse);
   }
 };
+// GET /api/v1/guest/request-details?token=xxx
+export const getGuestRequestDetails = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { token } = req.query;
+
+  if (!token || typeof token !== "string") {
+    res.status(400).json({ success: false, message: "Token is required." });
+    return;
+  }
+
+  try {
+    const db = getFirestore();
+    // 1. Validate Token
+    const tokenDoc = await db.collection("signing_tokens").doc(token).get();
+
+    if (!tokenDoc.exists) {
+      res
+        .status(404)
+        .json({ success: false, message: "Invalid signing link." });
+      return;
+    }
+
+    const tokenData = tokenDoc.data()!;
+    if (tokenData.used) {
+      res
+        .status(400)
+        .json({ success: false, message: "This link has already been used." });
+      return;
+    }
+
+    if (new Date() > tokenData.expiresAt.toDate()) {
+      res
+        .status(400)
+        .json({ success: false, message: "This link has expired." });
+      return;
+    }
+
+    // 2. Fetch Request Details
+    const requestDoc = await db
+      .collection("signature_requests")
+      .doc(tokenData.requestId)
+      .get();
+    if (!requestDoc.exists) {
+      res
+        .status(404)
+        .json({ success: false, message: "Signature request not found." });
+      return;
+    }
+
+    const requestData = requestDoc.data()!;
+
+    // 3. Prepare response data
+    res.status(200).json({
+      success: true,
+      id: requestDoc.id, // Frontend expects id here
+      data: {
+        documentName: requestData.documentName,
+        documentUrl: requestData.documentUrl,
+        signers: requestData.signers,
+        status: requestData.status,
+      },
+    });
+  } catch (error) {
+    console.error("[getGuestRequestDetails] Error:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
+// GET /api/v1/guest/document-bytes?token=xxx
+export const getGuestDocumentBytes = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { token } = req.query;
+
+  if (!token || typeof token !== "string") {
+    res.status(400).json({ success: false, message: "Token is required." });
+    return;
+  }
+
+  try {
+    const db = getFirestore();
+    const tokenDoc = await db.collection("signing_tokens").doc(token).get();
+
+    if (!tokenDoc.exists) {
+      res.status(404).json({ success: false, message: "Invalid token." });
+      return;
+    }
+
+    const tokenData = tokenDoc.data()!;
+    const requestDoc = await db
+      .collection("signature_requests")
+      .doc(tokenData.requestId)
+      .get();
+
+    if (!requestDoc.exists) {
+      res.status(404).json({ success: false, message: "Request not found." });
+      return;
+    }
+
+    const requestData = requestDoc.data()!;
+
+    // Fetch from Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(requestData.storagePath);
+
+    const [exists] = await file.exists();
+    if (!exists) {
+      res
+        .status(404)
+        .json({ success: false, message: "File not found in storage." });
+      return;
+    }
+
+    const [buffer] = await file.download();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${requestData.documentName}"`,
+    );
+    res.send(buffer);
+  } catch (error) {
+    console.error("[getGuestDocumentBytes] Error:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch document." });
+  }
+};
+
+// POST /api/v1/guest/submit-signature?token=xxx
+export const submitGuestSignature = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { token } = req.query;
+  const { signatures } = req.body;
+
+  if (!token || typeof token !== "string") {
+    res.status(400).json({ success: false, message: "Token is required." });
+    return;
+  }
+
+  try {
+    const db = getFirestore();
+    const tokenDoc = await db.collection("signing_tokens").doc(token).get();
+
+    if (!tokenDoc.exists) {
+      res.status(404).json({ success: false, message: "Invalid token." });
+      return;
+    }
+
+    const tokenData = tokenDoc.data()!;
+    const requestRef = db
+      .collection("signature_requests")
+      .doc(tokenData.requestId);
+    const requestDoc = await requestRef.get();
+
+    if (!requestDoc.exists) {
+      res.status(404).json({ success: false, message: "Request not found." });
+      return;
+    }
+
+    // Update request status and signer fields
+    // In a real app, you'd find the signer and update their fields
+    // For now, we'll mark the token as used and the request as in-progress
+    await tokenDoc.ref.update({
+      used: true,
+      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await requestRef.update({
+      status: "inProgress",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res
+      .status(200)
+      .json({ success: true, message: "Signature submitted successfully." });
+  } catch (error) {
+    console.error("[submitGuestSignature] Error:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to submit signature." });
+  }
+};
