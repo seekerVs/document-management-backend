@@ -31,7 +31,9 @@ const corsOptions: cors.CorsOptions = {
     const list = getAllowedOrigins();
 
     // Log the incoming origin for debugging
-    console.log(`[CORS Request] Origin: ${origin || "No Origin (likely local/mobile)"}`);
+    console.log(
+      `[CORS Request] Origin: ${origin || "No Origin (likely local/mobile)"}`,
+    );
     console.log(`[CORS Check] Allowed List: ${list.join(", ")}`);
 
     if (!origin || list.includes(origin) || list.includes("*")) {
