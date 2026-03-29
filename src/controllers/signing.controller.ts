@@ -388,6 +388,7 @@ export const getGuestRequestDetails = async (
         documentUrl: requestData.documentUrl,
         signers: requestData.signers,
         status: requestData.status,
+        targetSignerEmail: tokenData.signerEmail,
       },
     });
   } catch (error) {
