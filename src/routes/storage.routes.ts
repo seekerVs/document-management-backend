@@ -13,13 +13,18 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
-    const allowedMimes = ["application/pdf"];
-    const allowedExts = [".pdf"];
+    const allowedMimes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+    ];
+    const allowedExts = [".pdf", ".jpg", ".jpeg", ".png"];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error("Only PDF files are accepted."));
+      cb(new Error("Only PDF files and images (JPG, PNG) are accepted."));
     }
   },
 });
