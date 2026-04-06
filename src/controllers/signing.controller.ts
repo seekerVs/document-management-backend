@@ -516,3 +516,109 @@ export const submitGuestSignature = async (
       .json({ success: false, message: "Failed to submit signature." });
   }
 };
+
+// POST /api/v1/guest/resend-link?token=xxx
+// Allows a guest with an expired token to request a new link
+export const resendGuestSigningLink = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { token } = req.query;
+
+  if (!token || typeof token !== "string") {
+    res.status(400).json({ success: false, message: "Token is required." } as ApiResponse);
+    return;
+  }
+
+  try {
+    const db = getFirestore();
+    const oldTokenDoc = await db.collection("signing_tokens").doc(token).get();
+
+    if (!oldTokenDoc.exists) {
+      res.status(404).json({ success: false, message: "Signing link not found." } as ApiResponse);
+      return;
+    }
+
+    const oldTokenData = oldTokenDoc.data()!;
+
+    if (oldTokenData.used) {
+      res.status(400).json({ success: false, message: "This signing link has already been used." } as ApiResponse);
+      return;
+    }
+
+    // Fetch the signature request to get requester and document info
+    const requestRef = db.collection("signature_requests").doc(oldTokenData.requestId);
+    const requestDoc = await requestRef.get();
+
+    if (!requestDoc.exists) {
+      res.status(404).json({ success: false, message: "Signature request not found." } as ApiResponse);
+      return;
+    }
+
+    const requestData = requestDoc.data()!;
+    
+    // Prevent resending if the document is already fully completed
+    if (requestData.status === "completed") {
+      res.status(400).json({ success: false, message: "This document has already been fully signed." } as ApiResponse);
+      return;
+    }
+
+    // Find the specific signer in the signers array
+    const signers: any[] = requestData.signers || [];
+    const signerIndex = signers.findIndex(
+      (s: any) => s.role === "needsToSign" && s.signerEmail === oldTokenData.signerEmail && s.signingToken === token
+    );
+
+    if (signerIndex === -1) {
+      res.status(404).json({ success: false, message: "Signer record not found for this token." } as ApiResponse);
+      return;
+    }
+
+    // Generate new token
+    const newToken = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS);
+
+    // Save the new token document
+    await db.collection("signing_tokens").doc(newToken).set({
+      token: newToken,
+      documentId: oldTokenData.documentId,
+      requestId: oldTokenData.requestId,
+      signerEmail: oldTokenData.signerEmail,
+      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      used: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Update the signer array with the new token
+    signers[signerIndex].signingToken = newToken;
+    signers[signerIndex].tokenExpiry = admin.firestore.Timestamp.fromDate(expiresAt);
+
+    // If the request was previously marked as expired, we probably want to flip it back to pending or inProgress
+    // But safely we can just update the signers array
+    const updatePayload: any = { signers };
+    if (requestData.status === "expired") {
+       // Check if there are other signers still in progress/pending. Usually, if re-sent, it becomes pending again.
+       updatePayload.status = "pending";
+    }
+    
+    await requestRef.update(updatePayload);
+
+    // Send the email using the generic email service
+    await sendSigningLinkEmail(
+      oldTokenData.signerEmail,
+      signers[signerIndex].signerName ?? "",
+      requestData.requesterName ?? "Someone", 
+      requestData.documentName ?? "Document",
+      buildSigningUrl(newToken)
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "New signing link sent successfully.",
+    } as ApiResponse);
+  } catch (error) {
+    console.error("[resendGuestSigningLink] Error:", error);
+    res.status(500).json({ success: false, message: "Failed to resend signing link." } as ApiResponse);
+  }
+};

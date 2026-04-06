@@ -3,6 +3,7 @@ import {
   getGuestRequestDetails,
   getGuestDocumentBytes,
   submitGuestSignature,
+  resendGuestSigningLink,
 } from "../controllers/signing.controller";
 
 const router = Router();
@@ -18,5 +19,8 @@ router.get("/document-bytes", getGuestDocumentBytes);
 
 // POST /api/v1/guest/submit-signature?token=xxx
 router.post("/submit-signature", submitGuestSignature);
+
+// POST /api/v1/guest/resend-link?token=xxx
+router.post("/resend-link", resendGuestSigningLink);
 
 export default router;
