@@ -590,6 +590,13 @@ export const resendGuestSigningLink = async (
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Invalidate the old token so it can never be used again
+    await oldTokenDoc.ref.update({
+      used: true,
+      invalidatedBy: newToken,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     // Update the signer array with the new token
     signers[signerIndex].signingToken = newToken;
     signers[signerIndex].tokenExpiry = admin.firestore.Timestamp.fromDate(expiresAt);
