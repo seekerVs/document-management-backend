@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getFirestore } from "../services/firebase.service.js";
 import {
   sendCopyEmail,
@@ -44,7 +45,7 @@ export const createSignatureRequest = async (
   try {
     const db = getFirestore();
     const requestId = uuidv4();
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS);
 
@@ -64,7 +65,7 @@ export const createSignatureRequest = async (
         ...signer,
         status: "pending",
         signingToken: token,
-        tokenExpiry: admin.firestore.Timestamp.fromDate(expiresAt),
+        tokenExpiry: Timestamp.fromDate(expiresAt),
         tokenUsed: false,
         signedAt: null,
         signatureImageUrl: null,
@@ -107,7 +108,7 @@ export const createSignatureRequest = async (
             documentId,
             requestId,
             signerEmail: signer.signerEmail.trim().toLowerCase(),
-            expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+            expiresAt: Timestamp.fromDate(expiresAt),
             used: false,
             createdAt: now,
           });
@@ -180,9 +181,9 @@ export const sendSigningLink = async (
         documentId,
         requestId,
         signerEmail: signerEmail.trim().toLowerCase(),
-        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        expiresAt: Timestamp.fromDate(expiresAt),
         used: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
     await sendSigningLinkEmail(
@@ -310,7 +311,7 @@ export const expireRequests = async (
 
       await doc.ref.update({
         status: "expired",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
 
       // Notify owner
@@ -511,12 +512,12 @@ export const submitGuestSignature = async (
     // For now, we'll mark the token as used and the request as in-progress
     await tokenDoc.ref.update({
       used: true,
-      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      usedAt: FieldValue.serverTimestamp(),
     });
 
     await requestRef.update({
       status: "inProgress",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     res
@@ -623,22 +624,21 @@ export const resendGuestSigningLink = async (
         documentId: oldTokenData.documentId,
         requestId: oldTokenData.requestId,
         signerEmail: oldTokenData.signerEmail,
-        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        expiresAt: Timestamp.fromDate(expiresAt),
         used: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
     // Invalidate the old token so it can never be used again
     await oldTokenDoc.ref.update({
       used: true,
       invalidatedBy: newToken,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     // Update the signer array with the new token
     signers[signerIndex].signingToken = newToken;
-    signers[signerIndex].tokenExpiry =
-      admin.firestore.Timestamp.fromDate(expiresAt);
+    signers[signerIndex].tokenExpiry = Timestamp.fromDate(expiresAt);
 
     // If the request was previously marked as expired, we probably want to flip it back to pending or inProgress
     // But safely we can just update the signers array

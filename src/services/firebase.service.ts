@@ -1,4 +1,6 @@
-import admin from "firebase-admin";
+import * as admin from "firebase-admin";
+import { Firestore } from "firebase-admin/firestore";
+import { Auth } from "firebase-admin/auth";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -39,11 +41,11 @@ export const initFirebase = (): void => {
   console.log("✅ Firebase Admin SDK initialized");
 };
 
-export const getFirestore = (): admin.firestore.Firestore => {
+export const getFirestore = (): Firestore => {
   return admin.firestore();
 };
 
-export const getAuth = (): admin.auth.Auth => {
+export const getAuth = (): Auth => {
   return admin.auth();
 };
 

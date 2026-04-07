@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getFirestore, getAuth } from "./firebase.service.js";
 import { OtpRecord } from "../types/index.js";
 
@@ -44,11 +45,11 @@ export const storeOtp = async (
     .set({
       email,
       code,
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      expiresAt: Timestamp.fromDate(expiresAt),
       used: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     } as Omit<OtpRecord, "createdAt"> & {
-      createdAt: admin.firestore.FieldValue;
+      createdAt: FieldValue;
     });
 };
 

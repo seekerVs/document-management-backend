@@ -1,6 +1,7 @@
 // src/types/index.ts
 
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 
 export interface ApiResponse<T = null> {
   success: boolean;
@@ -11,9 +12,9 @@ export interface ApiResponse<T = null> {
 export interface OtpRecord {
   email: string;
   code: string;
-  expiresAt: admin.firestore.Timestamp;
+  expiresAt: Timestamp;
   used: boolean;
-  createdAt: admin.firestore.Timestamp;
+  createdAt: Timestamp;
 }
 
 export interface SendOtpRequest {

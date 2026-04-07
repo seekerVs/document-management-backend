@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { getFirestore } from "./firebase.service.js";
 
 interface CreateNotificationParams {
@@ -24,7 +25,7 @@ export class NotificationRepository {
       requestId: params.requestId ?? null,
       documentName: params.documentName ?? null,
       actorName: params.actorName ?? null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
   }
 }
