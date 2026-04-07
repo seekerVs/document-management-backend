@@ -1,5 +1,8 @@
-import { initializeApp, credential } from "firebase-admin";
-import { getFirestore as adminGetFirestore, Firestore } from "firebase-admin/firestore";
+import admin from "firebase-admin";
+import {
+  getFirestore as adminGetFirestore,
+  Firestore,
+} from "firebase-admin/firestore";
 import { getAuth as adminGetAuth, Auth } from "firebase-admin/auth";
 import * as fs from "fs";
 import * as path from "path";
@@ -33,8 +36,8 @@ export const initFirebase = (): void => {
   const serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, "utf8"));
   resolvedStorageBucket = resolveStorageBucket(serviceAccount.project_id);
 
-  initializeApp({
-    credential: credential.cert(serviceAccount),
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
   });
 
   initialized = true;
