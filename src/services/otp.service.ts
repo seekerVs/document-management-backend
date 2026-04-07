@@ -1,6 +1,6 @@
 import * as admin from "firebase-admin";
-import { getFirestore, getAuth } from "./firebase.service";
-import { OtpRecord } from "../types";
+import { getFirestore, getAuth } from "./firebase.service.js";
+import { OtpRecord } from "../types/index.js";
 
 const OTP_COLLECTION = "password_reset_otps";
 

@@ -4,16 +4,16 @@ import {
   SendOtpRequest,
   VerifyOtpRequest,
   ResetPasswordRequest,
-} from "../types";
+} from "../types/index.js";
 import {
   generateOtp,
   invalidateOtp,
   isEmailRegistered,
   storeOtp,
   verifyOtp,
-} from "../services/otp.service";
-import { sendOtpEmail } from "../services/email.service";
-import { getAuth } from "../services/firebase.service";
+} from "../services/otp.service.js";
+import { sendOtpEmail } from "../services/email.service.js";
+import { getAuth } from "../services/firebase.service.js";
 
 const OTP_EXPIRY = parseInt(process.env.OTP_EXPIRY_MINUTES ?? "10");
 const OTP_LENGTH = parseInt(process.env.OTP_LENGTH ?? "6");

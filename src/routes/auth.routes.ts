@@ -1,11 +1,14 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { validateBody, validateEmail } from "../middleware/validate.middleware";
+import {
+  validateBody,
+  validateEmail,
+} from "../middleware/validate.middleware.js";
 import {
   resetPassword,
   sendOtp,
   verifyOtpCode,
-} from "../controllers/auth.controller";
+} from "../controllers/auth.controller.js";
 
 // src/routes/auth.routes.ts
 

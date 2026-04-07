@@ -2,12 +2,12 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { validateApiKey } from "./middleware/auth.middleware";
-import authRoutes from "./routes/auth.routes";
-import signingRoutes from "./routes/signing.routes";
-import guestRoutes from "./routes/guest.routes";
-import { initFirebase } from "./services/firebase.service";
-import storageRoutes from "./routes/storage.routes";
+import { validateApiKey } from "./middleware/auth.middleware.js";
+import authRoutes from "./routes/auth.routes.js";
+import signingRoutes from "./routes/signing.routes.js";
+import guestRoutes from "./routes/guest.routes.js";
+import { initFirebase } from "./services/firebase.service.js";
+import storageRoutes from "./routes/storage.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;

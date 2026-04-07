@@ -1,15 +1,18 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import * as admin from "firebase-admin";
-import { getFirestore } from "../services/firebase.service";
-import { sendCopyEmail, sendSigningLinkEmail } from "../services/email.service";
-import { NotificationRepository } from "../services/notification.service";
+import { getFirestore } from "../services/firebase.service.js";
+import {
+  sendCopyEmail,
+  sendSigningLinkEmail,
+} from "../services/email.service.js";
+import { NotificationRepository } from "../services/notification.service.js";
 import {
   ApiResponse,
   CreateSignatureRequestBody,
   SendSigningLinkRequest,
-} from "../types";
-import { downloadFromStorage } from "../services/supabase.service";
+} from "../types/index.js";
+import { downloadFromStorage } from "../services/supabase.service.js";
 
 const TOKEN_EXPIRY_HOURS = 72;
 const BASE_URL = process.env.SIGNING_BASE_URL ?? "https://your-web-app.com";
@@ -536,7 +539,9 @@ export const resendGuestSigningLink = async (
   const { token } = req.query;
 
   if (!token || typeof token !== "string") {
-    res.status(400).json({ success: false, message: "Token is required." } as ApiResponse);
+    res
+      .status(400)
+      .json({ success: false, message: "Token is required." } as ApiResponse);
     return;
   }
 
@@ -545,42 +550,62 @@ export const resendGuestSigningLink = async (
     const oldTokenDoc = await db.collection("signing_tokens").doc(token).get();
 
     if (!oldTokenDoc.exists) {
-      res.status(404).json({ success: false, message: "Signing link not found." } as ApiResponse);
+      res.status(404).json({
+        success: false,
+        message: "Signing link not found.",
+      } as ApiResponse);
       return;
     }
 
     const oldTokenData = oldTokenDoc.data()!;
 
     if (oldTokenData.used) {
-      res.status(400).json({ success: false, message: "This signing link has already been used." } as ApiResponse);
+      res.status(400).json({
+        success: false,
+        message: "This signing link has already been used.",
+      } as ApiResponse);
       return;
     }
 
     // Fetch the signature request to get requester and document info
-    const requestRef = db.collection("signature_requests").doc(oldTokenData.requestId);
+    const requestRef = db
+      .collection("signature_requests")
+      .doc(oldTokenData.requestId);
     const requestDoc = await requestRef.get();
 
     if (!requestDoc.exists) {
-      res.status(404).json({ success: false, message: "Signature request not found." } as ApiResponse);
+      res.status(404).json({
+        success: false,
+        message: "Signature request not found.",
+      } as ApiResponse);
       return;
     }
 
     const requestData = requestDoc.data()!;
-    
+
     // Prevent resending if the document is already fully completed
     if (requestData.status === "completed") {
-      res.status(400).json({ success: false, message: "This document has already been fully signed." } as ApiResponse);
+      res.status(400).json({
+        success: false,
+        message: "This document has already been fully signed.",
+      } as ApiResponse);
       return;
     }
 
     // Find the specific signer in the signers array
     const signers: any[] = requestData.signers || [];
     const signerIndex = signers.findIndex(
-      (s: any) => s.role === "needsToSign" && s.signerEmail === oldTokenData.signerEmail && s.signingToken === token
+      (s: any) =>
+        s.role === "needsToSign" &&
+        s.signerEmail === oldTokenData.signerEmail &&
+        s.signingToken === token,
     );
 
     if (signerIndex === -1) {
-      res.status(404).json({ success: false, message: "Signer record not found for this token." } as ApiResponse);
+      res.status(404).json({
+        success: false,
+        message: "Signer record not found for this token.",
+      } as ApiResponse);
       return;
     }
 
@@ -590,15 +615,18 @@ export const resendGuestSigningLink = async (
     expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS);
 
     // Save the new token document
-    await db.collection("signing_tokens").doc(newToken).set({
-      token: newToken,
-      documentId: oldTokenData.documentId,
-      requestId: oldTokenData.requestId,
-      signerEmail: oldTokenData.signerEmail,
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-      used: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    await db
+      .collection("signing_tokens")
+      .doc(newToken)
+      .set({
+        token: newToken,
+        documentId: oldTokenData.documentId,
+        requestId: oldTokenData.requestId,
+        signerEmail: oldTokenData.signerEmail,
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        used: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
     // Invalidate the old token so it can never be used again
     await oldTokenDoc.ref.update({
@@ -609,23 +637,24 @@ export const resendGuestSigningLink = async (
 
     // Update the signer array with the new token
     signers[signerIndex].signingToken = newToken;
-    signers[signerIndex].tokenExpiry = admin.firestore.Timestamp.fromDate(expiresAt);
+    signers[signerIndex].tokenExpiry =
+      admin.firestore.Timestamp.fromDate(expiresAt);
 
     // If the request was previously marked as expired, we probably want to flip it back to pending or inProgress
     // But safely we can just update the signers array
     const updatePayload: any = { signers };
     if (requestData.status === "expired") {
-       // Check if there are other signers still in progress/pending. Usually, if re-sent, it becomes pending again.
-       updatePayload.status = "pending";
+      // Check if there are other signers still in progress/pending. Usually, if re-sent, it becomes pending again.
+      updatePayload.status = "pending";
     }
-    
+
     await requestRef.update(updatePayload);
 
     // Send the email using the generic email service
     await sendSigningLinkEmail(
       oldTokenData.signerEmail,
       signers[signerIndex].signerName ?? "",
-      requestData.requesterName ?? "Someone", 
+      requestData.requesterName ?? "Someone",
       requestData.documentName ?? "Document",
       buildSigningUrl(newToken),
       requestData.requesterEmail,
@@ -638,6 +667,9 @@ export const resendGuestSigningLink = async (
     } as ApiResponse);
   } catch (error) {
     console.error("[resendGuestSigningLink] Error:", error);
-    res.status(500).json({ success: false, message: "Failed to resend signing link." } as ApiResponse);
+    res.status(500).json({
+      success: false,
+      message: "Failed to resend signing link.",
+    } as ApiResponse);
   }
 };

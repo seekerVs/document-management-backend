@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { validateBody } from "../middleware/validate.middleware";
+import { validateBody } from "../middleware/validate.middleware.js";
 import {
   createSignatureRequest,
   expireRequests,
   sendSigningLink,
   validateToken,
-} from "../controllers/signing.controller";
+} from "../controllers/signing.controller.js";
 
 const router = Router();
 

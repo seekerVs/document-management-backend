@@ -3,8 +3,8 @@ import {
   deleteFromStorage,
   getSignedUrl,
   uploadToStorage,
-} from "../services/supabase.service";
-import { ApiResponse } from "../types";
+} from "../services/supabase.service.js";
+import { ApiResponse } from "../types/index.js";
 
 // POST /api/storage/upload
 export const uploadFile = async (

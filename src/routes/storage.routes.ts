@@ -5,7 +5,7 @@ import {
   deleteFile,
   signedUrl,
   uploadFile,
-} from "../controllers/storage.controller";
+} from "../controllers/storage.controller.js";
 
 const router = Router();
 

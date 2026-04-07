@@ -1,5 +1,5 @@
 import * as admin from "firebase-admin";
-import { getFirestore } from "./firebase.service";
+import { getFirestore } from "./firebase.service.js";
 
 interface CreateNotificationParams {
   recipientUid: string;

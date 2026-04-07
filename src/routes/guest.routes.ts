@@ -4,7 +4,7 @@ import {
   getGuestDocumentBytes,
   submitGuestSignature,
   resendGuestSigningLink,
-} from "../controllers/signing.controller";
+} from "../controllers/signing.controller.js";
 
 const router = Router();
 
