@@ -34,6 +34,8 @@ export const createSignatureRequest = async (
     storagePath,
     signers,
     signingOrderEnabled,
+    message,
+    requesterEmail,
   } = req.body as CreateSignatureRequestBody;
 
   try {
@@ -81,6 +83,8 @@ export const createSignatureRequest = async (
         storagePath,
         status: "pending",
         signingOrderEnabled,
+        message: message ?? null,
+        requesterEmail: requesterEmail ?? null,
         signers: signersWithTokens,
         signerEmails: signers.map((s) => s.signerEmail.trim().toLowerCase()),
         createdAt: now,
@@ -112,6 +116,8 @@ export const createSignatureRequest = async (
           requesterName,
           documentName,
           buildSigningUrl(signer.signingToken),
+          requesterEmail,
+          message,
         );
       } else if (signer.role === "receivesACopy") {
         // Send copy notification — no token needed
@@ -153,6 +159,8 @@ export const sendSigningLink = async (
     signerName,
     requesterName,
     documentName,
+    requesterEmail,
+    message,
   } = req.body as SendSigningLinkRequest;
 
   try {
@@ -180,6 +188,8 @@ export const sendSigningLink = async (
       requesterName,
       documentName,
       buildSigningUrl(token),
+      requesterEmail,
+      message,
     );
 
     res.status(200).json({
@@ -617,7 +627,9 @@ export const resendGuestSigningLink = async (
       signers[signerIndex].signerName ?? "",
       requestData.requesterName ?? "Someone", 
       requestData.documentName ?? "Document",
-      buildSigningUrl(newToken)
+      buildSigningUrl(newToken),
+      requestData.requesterEmail,
+      requestData.message,
     );
 
     res.status(200).json({

@@ -38,8 +38,8 @@ export interface SendSigningLinkRequest {
   signerName?: string;
   requesterName: string;
   documentName: string;
-  signingToken: string;
-  signingUrl: string;
+  requesterEmail?: string;
+  message?: string;
 }
 
 export interface UploadFileResponse {
@@ -82,4 +82,6 @@ export interface CreateSignatureRequestBody {
   storagePath: string;
   signers: SignerPayload[];
   signingOrderEnabled: boolean;
+  message?: string;
+  requesterEmail?: string;
 }
