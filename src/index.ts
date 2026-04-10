@@ -20,12 +20,6 @@ const getAllowedOrigins = () => {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  if (configured.length === 0) {
-    throw new Error(
-      "ALLOWED_ORIGINS is required. Set one or more comma-separated origins.",
-    );
-  }
-
   return configured;
 };
 
@@ -55,7 +49,7 @@ const corsOptions: cors.CorsOptions = {
   credentials: true,
 };
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
+// Middleware
 app.use(helmet());
 app.set("trust proxy", 1);
 
@@ -64,29 +58,29 @@ app.options(/.*/, cors(corsOptions));
 
 app.use(express.json());
 
-// ─── Health check (no auth required) ─────────────────────────────────────────
+// Health check (no auth required)
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ─── Public Guest Routes (No API Key) ───────────────────────────────────────
+// Public Guest Routes (No API Key)
 app.use("/api/v1/guest", guestRoutes);
 app.use("/api/storage", storageRoutes);
 
-// ─── API routes (all require x-api-key header) ───────────────────────────────
+// API routes (all require x-api-key header)
 app.use("/api", validateApiKey);
 app.use("/api/auth", authRoutes);
 app.use("/api/signing", signingRoutes);
 
-// ─── 404 handler ─────────────────────────────────────────────────────────────
+// 404 handler
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });
 
-// ─── Start server ─────────────────────────────────────────────────────────────
+// Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV ?? "development"}`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV ?? "development"}`);
 });
 
 export default app;

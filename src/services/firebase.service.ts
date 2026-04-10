@@ -7,8 +7,6 @@ import { getAuth as adminGetAuth, Auth } from "firebase-admin/auth";
 import * as fs from "fs";
 import * as path from "path";
 
-// src/services/firebase.service.ts
-
 let initialized = false;
 let resolvedStorageBucket = "";
 
@@ -41,7 +39,7 @@ export const initFirebase = (): void => {
   });
 
   initialized = true;
-  console.log("✅ Firebase Admin SDK initialized");
+  console.log("Firebase Admin SDK initialized");
 };
 
 export const getFirestore = (): Firestore => {

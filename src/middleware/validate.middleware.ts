@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { ApiResponse } from "../types/index.js";
 
-// src/middleware/validate.middleware.ts
-
 export const validateBody = (requiredFields: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const missing = requiredFields.filter(

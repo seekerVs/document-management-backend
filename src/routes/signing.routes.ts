@@ -5,6 +5,7 @@ import {
   expireRequests,
   sendSigningLink,
   validateToken,
+  submitSignature,
 } from "../controllers/signing.controller.js";
 
 const router = Router();
@@ -42,5 +43,12 @@ router.post("/expire-requests", expireRequests);
 
 // GET /api/signing/validate-token?token=xxx
 router.get("/validate-token", validateToken);
+
+// POST /api/signing/submit-signature
+router.post(
+  "/submit-signature",
+  validateBody(["requestId", "signerEmail", "signerName", "updatedFields"]),
+  submitSignature,
+);
 
 export default router;

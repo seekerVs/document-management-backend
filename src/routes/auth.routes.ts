@@ -10,8 +10,6 @@ import {
   verifyOtpCode,
 } from "../controllers/auth.controller.js";
 
-// src/routes/auth.routes.ts
-
 const router = Router();
 
 // Rate limit OTP sends — max 5 per 15 minutes per IP

@@ -15,7 +15,7 @@ export const generateOtp = (length: number = 6): string => {
   return otp;
 };
 
-// ─── Check if email is registered in Firebase Auth ───────────────────────────
+// Check if email is registered in Firebase Auth
 
 export const isEmailRegistered = async (email: string): Promise<boolean> => {
   try {
@@ -27,7 +27,7 @@ export const isEmailRegistered = async (email: string): Promise<boolean> => {
   }
 };
 
-// ─── Store OTP in Firestore ───────────────────────────────────────────────────
+// Store OTP in Firestore
 
 export const storeOtp = async (
   email: string,
@@ -53,7 +53,7 @@ export const storeOtp = async (
     });
 };
 
-// ─── Verify OTP ───────────────────────────────────────────────────────────────
+// Verify OTP
 
 export type OtpVerifyResult =
   | "valid"
@@ -84,7 +84,7 @@ export const verifyOtp = async (
   return "valid";
 };
 
-// ─── Mark OTP as used after password reset ────────────────────────────────────
+// Mark OTP as used after password reset
 
 export const invalidateOtp = async (email: string): Promise<void> => {
   const db = getFirestore();

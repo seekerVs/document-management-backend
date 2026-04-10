@@ -1,12 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { ApiResponse } from "../types/index.js";
 
-// src/middleware/auth.middleware.ts
-//
-// Every request from the Flutter app must include:
-// Header: x-api-key: <API_SECRET_KEY from .env>
-// This prevents random internet traffic from hitting your endpoints.
-
 export const validateApiKey = (
   req: Request,
   res: Response,

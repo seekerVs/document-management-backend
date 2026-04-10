@@ -12,12 +12,15 @@ import {
   ApiResponse,
   CreateSignatureRequestBody,
   SendSigningLinkRequest,
+  SubmitSignatureRequest,
 } from "../types/index.js";
 import { downloadFromStorage } from "../services/supabase.service.js";
+import { SignatureService } from "../services/signature.service.js";
 
 const TOKEN_EXPIRY_HOURS = 72;
 const BASE_URL = process.env.SIGNING_BASE_URL ?? "https://your-web-app.com";
 const notifRepo = new NotificationRepository();
+const signatureService = new SignatureService();
 
 // Build guest signing URL from token
 const buildSigningUrl = (token: string): string =>
@@ -340,6 +343,45 @@ export const expireRequests = async (
     } as ApiResponse);
   }
 };
+
+// POST /api/signing/submit-signature
+// Authenticated submission from mobile app
+export const submitSignature = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const {
+    requestId,
+    signerEmail,
+    signerName,
+    updatedFields,
+    signatureImageUrl,
+    signerUid,
+  } = req.body as SubmitSignatureRequest;
+
+  try {
+    await signatureService.processSubmission({
+      requestId,
+      signerEmail,
+      signerName,
+      updatedFields,
+      signatureImageUrl,
+      signerUid: signerUid ?? (req as any).user?.uid,
+    });
+
+
+    res.status(200).json({
+      success: true,
+      message: "Signature submitted successfully.",
+    });
+  } catch (error: any) {
+    console.error("[submitSignature] Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to submit signature.",
+    });
+  }
+};
 // GET /api/v1/guest/request-details?token=xxx
 export const getGuestRequestDetails = async (
   req: Request,
@@ -507,17 +549,19 @@ export const submitGuestSignature = async (
       return;
     }
 
-    // Update request status and signer fields
-    // In a real app, you'd find the signer and update their fields
-    // For now, we'll mark the token as used and the request as in-progress
+    // Update request status and signer fields via centralized SignatureService
+    await signatureService.processSubmission({
+      requestId: tokenData.requestId,
+      signerEmail: tokenData.signerEmail,
+      signerName: "", // Guest name might be empty or we can resolve it from requestData
+      updatedFields: signatures,
+      ipAddress: req.ip,
+    });
+
+    // Mark token as used
     await tokenDoc.ref.update({
       used: true,
       usedAt: FieldValue.serverTimestamp(),
-    });
-
-    await requestRef.update({
-      status: "inProgress",
-      updatedAt: FieldValue.serverTimestamp(),
     });
 
     res

@@ -18,7 +18,7 @@ import { getAuth } from "../services/firebase.service.js";
 const OTP_EXPIRY = parseInt(process.env.OTP_EXPIRY_MINUTES ?? "10");
 const OTP_LENGTH = parseInt(process.env.OTP_LENGTH ?? "6");
 
-// ─── POST /api/auth/send-otp ──────────────────────────────────────────────────
+// POST /api/auth/send-otp
 // Checks if email is registered, generates OTP, sends email
 
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
@@ -52,7 +52,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// ─── POST /api/auth/verify-otp ────────────────────────────────────────────────
+// POST /api/auth/verify-otp
 // Verifies OTP code — call this before showing the new password screen
 
 export const verifyOtpCode = async (
@@ -109,7 +109,7 @@ export const verifyOtpCode = async (
   }
 };
 
-// ─── POST /api/auth/reset-password ────────────────────────────────────────────
+// POST /api/auth/reset-password
 // Verifies OTP one final time then updates password via Firebase Admin
 
 export const resetPassword = async (

@@ -86,3 +86,31 @@ export interface CreateSignatureRequestBody {
   message?: string;
   requesterEmail?: string;
 }
+
+// POST /api/signing/submit-signature body (Authenticated mobile)
+export interface SubmitSignatureRequest {
+  requestId: string;
+  signerEmail: string;
+  signerName: string;
+  updatedFields: SignatureFieldPayload[];
+  signatureImageUrl?: string;
+  signerUid?: string;
+}
+
+
+// POST /api/v1/guest/submit-signature body (Web guest)
+export interface SubmitGuestSignatureRequest {
+  signatures: SignatureFieldPayload[]; // Array of filled fields
+}
+
+export type SignatureRequestStatus = 
+  | "pending" 
+  | "inProgress" 
+  | "completed" 
+  | "declined" 
+  | "expired";
+
+export type SignerStatus = "pending" | "signed" | "declined";
+
+export type SignerRole = "needsToSign" | "receivesACopy";
+
