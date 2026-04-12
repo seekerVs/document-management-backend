@@ -3,6 +3,8 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { NotificationRepository } from "./notification.service.js";
 import { ActivityService } from "./activity.service.js";
 import { SignatureFieldPayload } from "../types/index.js";
+import { PdfService } from "./pdf.service.js";
+import { uploadToStorage } from "./supabase.service.js";
 
 const notifRepo = new NotificationRepository();
 const activityService = new ActivityService();
@@ -25,6 +27,9 @@ export class SignatureService {
     const requestRef = db
       .collection("signature_requests")
       .doc(params.requestId);
+
+    let allSignedState = false;
+    let dataForPdfGeneration: any = null;
 
     await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(requestRef);
@@ -66,6 +71,15 @@ export class SignatureService {
           ? FieldValue.serverTimestamp()
           : data.completedAt || null,
       });
+
+      if (allSigned) {
+        allSignedState = true;
+        dataForPdfGeneration = {
+          storagePath: data.storagePath,
+          documentUrl: data.documentUrl,
+          updatedSigners: updatedSigners,
+        };
+      }
 
       // 4. Handle Notifications and Activity Logs (Post-Transaction or via non-transactional calls)
       // We use await here but outside the transaction logic is often safer for side effects
@@ -128,5 +142,50 @@ export class SignatureService {
         });
       }
     });
+
+    // 5. Execute PDF Flattening outside the transaction to prevent timeouts
+    if (allSignedState && dataForPdfGeneration) {
+      try {
+        const pdfService = new PdfService();
+        const buffer = await pdfService.flattenDocument({
+          storagePath: dataForPdfGeneration.storagePath,
+          signers: dataForPdfGeneration.updatedSigners,
+        });
+
+        // Upload to a new path to preserve the original master document
+        const newStoragePath = dataForPdfGeneration.storagePath.replace(
+          /\.pdf$/i,
+          "_completed.pdf",
+        );
+        await uploadToStorage(buffer, newStoragePath, "application/pdf");
+
+        // Compute the new document URL simply by replacing the path strings
+        const newDocumentUrl = dataForPdfGeneration.documentUrl
+          .replace(
+            encodeURIComponent(dataForPdfGeneration.storagePath),
+            encodeURIComponent(newStoragePath),
+          )
+          .replace(
+            dataForPdfGeneration.storagePath.replace(/\//g, "%2F"),
+            newStoragePath.replace(/\//g, "%2F"),
+          )
+          .replace(dataForPdfGeneration.storagePath, newStoragePath);
+
+        // Update the Firestore database to point to the new flattened document
+        await requestRef.update({
+          storagePath: newStoragePath,
+          documentUrl: newDocumentUrl,
+        });
+
+        console.log(
+          `[SignatureService] PDF Flattened and saved to ${newStoragePath}`,
+        );
+      } catch (error) {
+        console.error(
+          "[SignatureService] Failed to generate flattened PDF:",
+          error,
+        );
+      }
+    }
   }
 }
