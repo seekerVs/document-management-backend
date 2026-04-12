@@ -22,8 +22,10 @@ export class SignatureService {
     signerUid?: string; // Optional: if the signer is an authenticated user
   }): Promise<void> {
     const db = getFirestore();
-    const requestRef = db.collection("signature_requests").doc(params.requestId);
-    
+    const requestRef = db
+      .collection("signature_requests")
+      .doc(params.requestId);
+
     await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(requestRef);
       if (!snap.exists) throw new Error("Signature request not found.");
@@ -35,8 +37,9 @@ export class SignatureService {
 
       // 1. Update the specific signer's record
       const updatedSigners = signers.map((s: any) => {
-        if (s.signerEmail.toLowerCase() !== params.signerEmail.toLowerCase()) return s;
-        
+        if (s.signerEmail.toLowerCase() !== params.signerEmail.toLowerCase())
+          return s;
+
         return {
           ...s,
           status: "signed",
@@ -59,13 +62,24 @@ export class SignatureService {
         signers: updatedSigners,
         status: allSigned ? "completed" : "inProgress",
         updatedAt: FieldValue.serverTimestamp(),
-        completedAt: allSigned ? FieldValue.serverTimestamp() : (data.completedAt || null),
+        completedAt: allSigned
+          ? FieldValue.serverTimestamp()
+          : data.completedAt || null,
       });
 
       // 4. Handle Notifications and Activity Logs (Post-Transaction or via non-transactional calls)
       // We use await here but outside the transaction logic is often safer for side effects
       // however for simplicity in this script we'll trigger them after the update.
-      
+
+      // Log Individual Signature Activity (logged first to get earlier server timestamp)
+      await activityService.logActivity({
+        documentId: data.documentId || params.requestId,
+        documentName: documentName,
+        actorUid: params.signerUid || "system",
+        actorName: params.signerName,
+        action: "signed",
+      });
+
       if (allSigned) {
         // Notification for Owner
         await notifRepo.createNotification({
@@ -93,7 +107,7 @@ export class SignatureService {
           }
         }
 
-        // Log Global Completion Activity
+        // Log Global Completion Activity (logged after "signed" to get later server timestamp)
         await activityService.logActivity({
           documentId: data.documentId || params.requestId,
           documentName: documentName,
@@ -113,15 +127,6 @@ export class SignatureService {
           actorName: params.signerName,
         });
       }
-
-      // Log Individual Signature Activity
-      await activityService.logActivity({
-        documentId: data.documentId || params.requestId,
-        documentName: documentName,
-        actorUid: params.signerUid || "system",
-        actorName: params.signerName,
-        action: "signed",
-      });
     });
   }
 }
