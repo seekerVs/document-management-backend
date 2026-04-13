@@ -4,6 +4,8 @@ import {
   getGuestDocumentBytes,
   submitGuestSignature,
   resendGuestSigningLink,
+  getCompletedRequestDetails,
+  getCompletedDocumentBytes,
 } from "../controllers/signing.controller.js";
 
 const router = Router();
@@ -22,5 +24,11 @@ router.post("/submit-signature", submitGuestSignature);
 
 // POST /api/v1/guest/resend-link?token=xxx
 router.post("/resend-link", resendGuestSigningLink);
+
+// GET /api/v1/guest/completed-details?requestId=xxx
+router.get("/completed-details", getCompletedRequestDetails);
+
+// GET /api/v1/guest/completed-bytes?requestId=xxx
+router.get("/completed-bytes", getCompletedDocumentBytes);
 
 export default router;

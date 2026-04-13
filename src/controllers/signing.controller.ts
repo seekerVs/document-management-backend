@@ -717,3 +717,103 @@ export const resendGuestSigningLink = async (
     } as ApiResponse);
   }
 };
+
+// GET /api/v1/guest/completed-details?requestId=xxx
+export const getCompletedRequestDetails = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { requestId } = req.query;
+
+  if (!requestId || typeof requestId !== "string") {
+    res.status(400).json({ success: false, message: "Request ID is required." });
+    return;
+  }
+
+  try {
+    const db = getFirestore();
+    const requestDoc = await db
+      .collection("signature_requests")
+      .doc(requestId)
+      .get();
+
+    if (!requestDoc.exists) {
+      res
+        .status(404)
+        .json({ success: false, message: "Signature request not found." });
+      return;
+    }
+
+    const data = requestDoc.data()!;
+    if (data.status !== "completed") {
+      res
+        .status(400)
+        .json({ success: false, message: "This document is not yet completed." });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      id: requestDoc.id,
+      data: {
+        documentName: data.documentName,
+        completedAt: data.completedAt,
+        signers: data.signers,
+      },
+    });
+  } catch (error) {
+    console.error("[getCompletedRequestDetails] Error:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
+// GET /api/v1/guest/completed-bytes?requestId=xxx
+export const getCompletedDocumentBytes = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { requestId } = req.query;
+
+  if (!requestId || typeof requestId !== "string") {
+    res.status(400).json({ success: false, message: "Request ID is required." });
+    return;
+  }
+
+  try {
+    const db = getFirestore();
+    const requestDoc = await db
+      .collection("signature_requests")
+      .doc(requestId)
+      .get();
+
+    if (!requestDoc.exists) {
+      res.status(404).json({ success: false, message: "Request not found." });
+      return;
+    }
+
+    const data = requestDoc.data()!;
+    if (data.status !== "completed" || !data.storagePath) {
+      res
+        .status(400)
+        .json({ success: false, message: "Completed document not available." });
+      return;
+    }
+
+    // Ensure we are serving the _completed version
+    const storagePath = data.storagePath;
+
+    const buffer = await downloadFromStorage(storagePath);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${data.documentName}"`,
+    );
+    res.send(buffer);
+  } catch (error) {
+    console.error("[getCompletedDocumentBytes] Error:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch completed document." });
+  }
+};

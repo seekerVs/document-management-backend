@@ -121,3 +121,37 @@ export const sendCopyEmail = async (
     `,
   });
 };
+
+// Send completed document link email
+export const sendDocumentCompletedEmail = async (
+  toEmail: string,
+  recipientName: string,
+  requesterName: string,
+  documentName: string,
+  completedUrl: string,
+): Promise<void> => {
+  await brevo.transactionalEmails.sendTransacEmail({
+    sender: sender(),
+    to: [{ email: toEmail }],
+    subject: `Document Completed: ${documentName}`,
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #141C23;">
+        ${headerHtml}
+        
+        <div style="background: #141C23; border-radius: 8px 8px 0 0; padding: 40px 32px; text-align: center; color: #FFFFFF;">
+          <div style="background: #FFFFFF; width: 48px; height: 48px; border-radius: 8px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; line-height: 48px;">
+            <span style="font-size: 24px;">&#x2705;</span>
+          </div>
+          <p style="font-size: 16px; margin: 0 0 24px;">The document <strong>${documentName}</strong> has been fully signed and is now complete.</p>
+          <a href="${completedUrl}" style="display: inline-block; background: #279EFF; color: #FFFFFF; font-weight: bold; text-decoration: none; padding: 14px 32px; border-radius: 4px; font-size: 16px;">View Completed Document</a>
+        </div>
+        
+        <div style="background: #FFFFFF; border: 1px solid #D9E4EE; border-top: none; border-radius: 0 0 8px 8px; padding: 32px 32px; margin-bottom: 32px;">
+          <p style="margin: 0; font-size: 14px; line-height: 1.5;">You can now view and download the final version of the document for your records.</p>
+        </div>
+        
+        ${footerHtml(requesterName)}
+      </div>
+    `,
+  });
+};

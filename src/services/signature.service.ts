@@ -5,6 +5,7 @@ import { ActivityService } from "./activity.service.js";
 import { SignatureFieldPayload } from "../types/index.js";
 import { PdfService } from "./pdf.service.js";
 import { uploadToStorage } from "./supabase.service.js";
+import { sendDocumentCompletedEmail } from "./email.service.js";
 
 const notifRepo = new NotificationRepository();
 const activityService = new ActivityService();
@@ -78,6 +79,10 @@ export class SignatureService {
           storagePath: data.storagePath,
           documentUrl: data.documentUrl,
           updatedSigners: updatedSigners,
+          requesterName: data.requesterName || "Someone",
+          requesterEmail: data.requesterEmail,
+          documentName: documentName,
+          requestId: params.requestId,
         };
       }
 
@@ -180,6 +185,32 @@ export class SignatureService {
         console.log(
           `[SignatureService] PDF Flattened and saved to ${newStoragePath}`,
         );
+
+        // 6. Send Completion Emails to all parties
+        const baseUrl = process.env.SIGNING_BASE_URL || "https://your-web-app.com";
+        const completedUrl = `${baseUrl}/completed/${dataForPdfGeneration.requestId}`;
+
+        // Send to Requester
+        if (dataForPdfGeneration.requesterEmail) {
+          await sendDocumentCompletedEmail(
+            dataForPdfGeneration.requesterEmail,
+            dataForPdfGeneration.requesterName,
+            dataForPdfGeneration.requesterName,
+            dataForPdfGeneration.documentName,
+            completedUrl,
+          );
+        }
+
+        // Send to all Signers (including CCs)
+        for (const s of dataForPdfGeneration.updatedSigners) {
+          await sendDocumentCompletedEmail(
+            s.signerEmail,
+            s.signerName,
+            dataForPdfGeneration.requesterName,
+            dataForPdfGeneration.documentName,
+            completedUrl,
+          );
+        }
       } catch (error) {
         console.error(
           "[SignatureService] Failed to generate flattened PDF:",
