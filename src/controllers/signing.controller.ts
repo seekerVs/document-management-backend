@@ -114,9 +114,10 @@ export const createSignatureRequest = async (
             createdAt: now,
           });
 
-        const emailDocName = documents.length > 1 
-          ? `${documents[0].documentName} and ${documents.length - 1} other(s)` 
-          : documents[0].documentName;
+        const emailDocName =
+          documents.length > 1
+            ? `${documents[0].documentName} and ${documents.length - 1} other(s)`
+            : documents[0].documentName;
 
         // Send signing link email
         await sendSigningLinkEmail(
@@ -129,9 +130,10 @@ export const createSignatureRequest = async (
           message,
         );
       } else if (signer.role === "receivesACopy") {
-        const emailDocName = documents.length > 1 
-          ? `${documents[0].documentName} and ${documents.length - 1} other(s)` 
-          : documents[0].documentName;
+        const emailDocName =
+          documents.length > 1
+            ? `${documents[0].documentName} and ${documents.length - 1} other(s)`
+            : documents[0].documentName;
 
         // Send copy notification — no token needed
         await sendCopyEmail(
@@ -773,12 +775,10 @@ export const getCompletedRequestDetails = async (
 
     const data = requestDoc.data()!;
     if (data.status !== "completed") {
-      res
-        .status(400)
-        .json({
-          success: false,
-          message: "This document is not yet completed.",
-        });
+      res.status(400).json({
+        success: false,
+        message: "This document is not yet completed.",
+      });
       return;
     }
 
