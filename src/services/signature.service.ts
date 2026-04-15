@@ -77,8 +77,14 @@ export class SignatureService {
       if (allSigned) {
         allSignedState = true;
         dataForPdfGeneration = {
-          storagePath: data.storagePath,
-          documentUrl: data.documentUrl,
+          documents: data.documents || [
+            {
+              documentId: data.documentId,
+              documentName: data.documentName,
+              documentUrl: data.documentUrl,
+              storagePath: data.storagePath,
+            },
+          ],
           updatedSigners: updatedSigners,
           requesterName: data.requesterName || "Someone",
           requesterEmail: data.requesterEmail,
@@ -154,58 +160,72 @@ export class SignatureService {
     if (allSignedState && dataForPdfGeneration) {
       try {
         const pdfService = new PdfService();
-        const buffer = await pdfService.flattenDocument({
-          storagePath: dataForPdfGeneration.storagePath,
-          signers: dataForPdfGeneration.updatedSigners,
-        });
+        const updatedDocuments = [...dataForPdfGeneration.documents];
 
-        // Upload to a new path to preserve the original master document
-        const newStoragePath = dataForPdfGeneration.storagePath.replace(
-          /\.pdf$/i,
-          "_completed.pdf",
-        );
-        await uploadToStorage(buffer, newStoragePath, "application/pdf");
+        for (let i = 0; i < updatedDocuments.length; i++) {
+          const doc = updatedDocuments[i];
+          console.log(`[SignatureService] Flattening doc ${i + 1}/${updatedDocuments.length}: ${doc.documentName}`);
 
-        // Compute the new document URL simply by replacing the path strings
-        const newDocumentUrl = dataForPdfGeneration.documentUrl
-          .replace(
-            encodeURIComponent(dataForPdfGeneration.storagePath),
-            encodeURIComponent(newStoragePath),
-          )
-          .replace(
-            dataForPdfGeneration.storagePath.replace(/\//g, "%2F"),
-            newStoragePath.replace(/\//g, "%2F"),
-          )
-          .replace(dataForPdfGeneration.storagePath, newStoragePath);
+          const buffer = await pdfService.flattenDocument({
+            storagePath: doc.storagePath,
+            documentId: doc.documentId,
+            signers: dataForPdfGeneration.updatedSigners,
+          });
 
-        // Update the Firestore database to point to the new flattened document
-        await requestRef.update({
-          storagePath: newStoragePath,
-          documentUrl: newDocumentUrl,
-        });
+          // Upload to a new path to preserve the original master document
+          const newStoragePath = doc.storagePath.replace(
+            /\.pdf$/i,
+            "_completed.pdf",
+          );
+          await uploadToStorage(buffer, newStoragePath, "application/pdf");
 
-        console.log(
-          `[SignatureService] PDF Flattened and saved to ${newStoragePath}`,
-        );
+          // Compute the new document URL
+          const newDocumentUrl = doc.documentUrl
+            .replace(
+              encodeURIComponent(doc.storagePath),
+              encodeURIComponent(newStoragePath),
+            )
+            .replace(
+              doc.storagePath.replace(/\//g, "%2F"),
+              newStoragePath.replace(/\//g, "%2F"),
+            )
+            .replace(doc.storagePath, newStoragePath);
 
-        // 6. File the flattened PDF into the sender's Documents library
-        //    under Requests/{documentName}/
-        try {
-          await this._fileCompletedDocumentForOwner({
-            db,
-            ownerUid: dataForPdfGeneration.requestedByUid,
-            documentName: dataForPdfGeneration.documentName,
+          // Update local copy
+          updatedDocuments[i] = {
+            ...doc,
             storagePath: newStoragePath,
             documentUrl: newDocumentUrl,
-            fileSizeMB: buffer.length / (1024 * 1024),
-          });
-        } catch (filingError) {
-          // Non-fatal: log but don't block the completion flow
-          console.error(
-            "[SignatureService] Failed to file completed document:",
-            filingError,
-          );
+          };
+
+          // File into owner's library
+          try {
+            await this._fileCompletedDocumentForOwner({
+              db,
+              ownerUid: dataForPdfGeneration.requestedByUid,
+              documentName: doc.documentName,
+              storagePath: newStoragePath,
+              documentUrl: newDocumentUrl,
+              fileSizeMB: buffer.length / (1024 * 1024),
+              requestId: dataForPdfGeneration.requestId,
+              totalDocs: updatedDocuments.length,
+            });
+          } catch (filingError) {
+            console.error(`[SignatureService] Failed to file doc ${doc.documentId}:`, filingError);
+          }
         }
+
+        // Update the Firestore database to point to the new flattened documents
+        await requestRef.update({
+          documents: updatedDocuments,
+          // Legacy support: point to the first one
+          storagePath: updatedDocuments[0].storagePath,
+          documentUrl: updatedDocuments[0].documentUrl,
+        });
+
+        console.log(`[SignatureService] All ${updatedDocuments.length} PDFs flattened and updated.`);
+
+        // Logic moved inside the loop above
 
         // 7. Send Completion Emails to all parties
         const baseUrl = process.env.SIGNING_BASE_URL || "https://your-web-app.com";
@@ -252,8 +272,10 @@ export class SignatureService {
     storagePath: string;
     documentUrl: string;
     fileSizeMB: number;
+    requestId: string;
+    totalDocs: number;
   }): Promise<void> {
-    const { db, ownerUid, documentName, storagePath, documentUrl, fileSizeMB } =
+    const { db, ownerUid, documentName, storagePath, documentUrl, fileSizeMB, requestId, totalDocs } =
       params;
     const now = FieldValue.serverTimestamp();
 
@@ -288,13 +310,22 @@ export class SignatureService {
       );
     }
 
-    // 2. Create a subfolder named after the document
-    const subFolderName = documentName.replace(/\.pdf$/i, "");
-    const subFolderId = uuidv4();
-    await db
-      .collection("folders")
-      .doc(subFolderId)
-      .set({
+    // 2. Create a subfolder for the request (use requestId or formatted name)
+    const requestFolderSnap = await db
+      .collection("signature_requests")
+      .doc(requestId)
+      .get();
+    const requestName = requestFolderSnap.data()?.documentName || "Request";
+    const subFolderName = totalDocs > 1 
+      ? `${requestName} (Request ID: ${requestId.slice(0, 8)})`
+      : requestName.replace(/\.pdf$/i, "");
+      
+    const subFolderId = `folder_${requestId}`; // Deterministic ID per request
+    const subFolderRef = db.collection("folders").doc(subFolderId);
+    const subFolderDoc = await subFolderRef.get();
+
+    if (!subFolderDoc.exists) {
+      await subFolderRef.set({
         ownerUid,
         name: subFolderName,
         parentId: requestsFolderId,
@@ -303,14 +334,15 @@ export class SignatureService {
         updatedAt: now,
       });
 
-    // Update parent item count
-    await db
-      .collection("folders")
-      .doc(requestsFolderId)
-      .update({
-        itemCount: FieldValue.increment(1),
-        updatedAt: now,
-      });
+      // Update parent item count
+      await db
+        .collection("folders")
+        .doc(requestsFolderId)
+        .update({
+          itemCount: FieldValue.increment(1),
+          updatedAt: now,
+        });
+    }
 
     // 3. Create a documents record for the flattened PDF
     const docId = uuidv4();

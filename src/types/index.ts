@@ -56,6 +56,7 @@ export interface SignedUrlResponse {
 export interface SignatureFieldPayload {
   fieldId: string;
   type: "signature" | "initials" | "dateSigned" | "textbox";
+  documentId: string;
   page: number;
   x: number;
   y: number;
@@ -73,14 +74,18 @@ export interface SignerPayload {
   fields: SignatureFieldPayload[];
 }
 
-// POST /api/signing/create-request body
-export interface CreateSignatureRequestBody {
-  requestedByUid: string;
-  requesterName: string;
+export interface DocumentPayload {
   documentId: string;
   documentName: string;
   documentUrl: string;
   storagePath: string;
+}
+
+// POST /api/signing/create-request body
+export interface CreateSignatureRequestBody {
+  requestedByUid: string;
+  requesterName: string;
+  documents: DocumentPayload[];
   signers: SignerPayload[];
   signingOrderEnabled: boolean;
   message?: string;

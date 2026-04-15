@@ -3,6 +3,7 @@ import { downloadFromStorage } from "./supabase.service.js";
 
 interface FlattenParams {
   storagePath: string;
+  documentId: string;
   signers: any[];
 }
 
@@ -12,10 +13,11 @@ export class PdfService {
    */
   async flattenDocument({
     storagePath,
+    documentId,
     signers,
   }: FlattenParams): Promise<Buffer> {
     try {
-      console.log(`[PdfService] Flattening document: ${storagePath}`);
+      console.log(`[PdfService] Flattening document: ${storagePath} (${documentId})`);
       
       // 1. Download original document from Supabase
       const basePdfBuffer = await downloadFromStorage(storagePath);
@@ -31,35 +33,38 @@ export class PdfService {
       for (const signer of signers) {
         if (!signer.fields || signer.fields.length === 0) continue;
 
+        // Filter fields for this document
+        // Fallback: If documentId is null/undefined in field, assume it belongs to this doc if doc array is empty or this is the only doc.
+        // But more reliably, we just check for match or absence.
+        const documentFields = signer.fields.filter((f: any) => 
+          !f.documentId || f.documentId === documentId
+        );
+
+        if (documentFields.length === 0) continue;
+
         // If signer has a signature image, we need to fetch it to embed
         let signatureImageBytes: ArrayBuffer | null = null;
         let signatureImageEmbed: any = null;
         
-        // Optimize: Fetch signature image once per signer if they have one
+        // ... (rest of the signature image fetching logic)
         if (signer.signatureImageUrl) {
           try {
             const resp = await fetch(signer.signatureImageUrl);
             if (resp.ok) {
               signatureImageBytes = await resp.arrayBuffer();
-              
-              // Decide embedding based on type (heuristic: checking magic bytes or just try-catch)
               try {
-                // Try PNG first
                 signatureImageEmbed = await pdfDoc.embedPng(signatureImageBytes);
               } catch (e) {
-                // Fallback to JPG
                 signatureImageEmbed = await pdfDoc.embedJpg(signatureImageBytes);
               }
-            } else {
-              console.warn(`[PdfService] Failed to fetch signature image for ${signer.signerEmail}`);
             }
           } catch (error) {
             console.error(`[PdfService] Error fetching signature image:`, error);
           }
         }
 
-        // Now process every field
-        for (const field of signer.fields) {
+        // Now process every field for this document
+        for (const field of documentFields) {
           const pageIndex = field.page; // 0-indexed mapped directly
           if (pageIndex < 0 || pageIndex >= pages.length) {
              console.warn(`[PdfService] Invalid page index ${pageIndex}`);

@@ -35,10 +35,7 @@ export const createSignatureRequest = async (
   const {
     requestedByUid,
     requesterName,
-    documentId,
-    documentName,
-    documentUrl,
-    storagePath,
+    documents,
     signers,
     signingOrderEnabled,
     message,
@@ -84,10 +81,11 @@ export const createSignatureRequest = async (
       .set({
         requestId,
         requestedByUid,
-        documentId,
-        documentName,
-        documentUrl,
-        storagePath,
+        documents,
+        documentId: documents[0].documentId, // For legacy compatibility
+        documentName: documents[0].documentName,
+        documentUrl: documents[0].documentUrl,
+        storagePath: documents[0].storagePath,
         status: "pending",
         signingOrderEnabled,
         message: message ?? null,
@@ -108,7 +106,7 @@ export const createSignatureRequest = async (
           .doc(signer.signingToken)
           .set({
             token: signer.signingToken,
-            documentId,
+            documentId: documents[0].documentId,
             requestId,
             signerEmail: signer.signerEmail.trim().toLowerCase(),
             expiresAt: Timestamp.fromDate(expiresAt),
@@ -116,23 +114,31 @@ export const createSignatureRequest = async (
             createdAt: now,
           });
 
+        const emailDocName = documents.length > 1 
+          ? `${documents[0].documentName} and ${documents.length - 1} other(s)` 
+          : documents[0].documentName;
+
         // Send signing link email
         await sendSigningLinkEmail(
           signer.signerEmail,
           signer.signerName,
           requesterName,
-          documentName,
+          emailDocName,
           buildSigningUrl(signer.signingToken),
           requesterEmail,
           message,
         );
       } else if (signer.role === "receivesACopy") {
+        const emailDocName = documents.length > 1 
+          ? `${documents[0].documentName} and ${documents.length - 1} other(s)` 
+          : documents[0].documentName;
+
         // Send copy notification — no token needed
         await sendCopyEmail(
           signer.signerEmail,
           signer.signerName,
           requesterName,
-          documentName,
+          emailDocName,
         );
       }
     });
@@ -369,7 +375,6 @@ export const submitSignature = async (
       signerUid: signerUid ?? (req as any).user?.uid,
     });
 
-
     res.status(200).json({
       success: true,
       message: "Signature submitted successfully.",
@@ -440,8 +445,14 @@ export const getGuestRequestDetails = async (
       success: true,
       id: requestDoc.id, // Frontend expects id here
       data: {
-        documentName: requestData.documentName,
-        documentUrl: requestData.documentUrl,
+        documents: requestData.documents || [
+          {
+            documentId: requestData.documentId,
+            documentName: requestData.documentName,
+            documentUrl: requestData.documentUrl,
+            storagePath: requestData.storagePath,
+          },
+        ],
         signers: requestData.signers,
         status: requestData.status,
         targetSignerEmail: tokenData.signerEmail,
@@ -496,11 +507,25 @@ export const getGuestDocumentBytes = async (
     }
 
     const requestData = requestDoc.data()!;
-    console.log(`[DocumentBytes] Storage Path: ${requestData.storagePath}`);
+    const { documentId } = req.query;
+
+    let storagePath = requestData.storagePath;
+    let documentName = requestData.documentName;
+
+    if (documentId && typeof documentId === "string") {
+      const docs = requestData.documents || [];
+      const found = docs.find((d: any) => d.documentId === documentId);
+      if (found) {
+        storagePath = found.storagePath;
+        documentName = found.documentName;
+      }
+    }
+
+    console.log(`[DocumentBytes] Storage Path: ${storagePath}`);
 
     // Fetch from Supabase Storage (FIXED: previously used Firebase Storage)
     console.log(`[DocumentBytes] Downloading from Supabase...`);
-    const buffer = await downloadFromStorage(requestData.storagePath);
+    const buffer = await downloadFromStorage(storagePath);
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -726,7 +751,9 @@ export const getCompletedRequestDetails = async (
   const { requestId } = req.query;
 
   if (!requestId || typeof requestId !== "string") {
-    res.status(400).json({ success: false, message: "Request ID is required." });
+    res
+      .status(400)
+      .json({ success: false, message: "Request ID is required." });
     return;
   }
 
@@ -748,7 +775,10 @@ export const getCompletedRequestDetails = async (
     if (data.status !== "completed") {
       res
         .status(400)
-        .json({ success: false, message: "This document is not yet completed." });
+        .json({
+          success: false,
+          message: "This document is not yet completed.",
+        });
       return;
     }
 
@@ -775,7 +805,9 @@ export const getCompletedDocumentBytes = async (
   const { requestId } = req.query;
 
   if (!requestId || typeof requestId !== "string") {
-    res.status(400).json({ success: false, message: "Request ID is required." });
+    res
+      .status(400)
+      .json({ success: false, message: "Request ID is required." });
     return;
   }
 
