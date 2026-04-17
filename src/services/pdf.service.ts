@@ -5,7 +5,25 @@ interface FlattenParams {
   storagePath: string;
   documentId: string;
   signers: any[];
+  totalDocuments?: number;
 }
+
+const normalizeDocRef = (value: unknown): string => {
+  if (typeof value !== "string") return "";
+  // Strip duplicate disambiguator from viewer IDs (e.g. library:abc#1)
+  const withoutSuffix = value.replace(/#\d+$/, "");
+  // Normalize known prefixes used by clients
+  if (withoutSuffix.startsWith("library:")) {
+    return withoutSuffix.substring("library:".length);
+  }
+  if (withoutSuffix.startsWith("storage:")) {
+    return withoutSuffix.substring("storage:".length);
+  }
+  if (withoutSuffix.startsWith("local:") || withoutSuffix.startsWith("legacy:")) {
+    return withoutSuffix;
+  }
+  return withoutSuffix;
+};
 
 export class PdfService {
   /**
@@ -15,6 +33,7 @@ export class PdfService {
     storagePath,
     documentId,
     signers,
+    totalDocuments = 1,
   }: FlattenParams): Promise<Buffer> {
     try {
       console.log(`[PdfService] Flattening document: ${storagePath} (${documentId})`);
@@ -25,9 +44,45 @@ export class PdfService {
       // 2. Load the PDF document
       const pdfDoc = await PDFDocument.load(basePdfBuffer);
       const pages = pdfDoc.getPages();
+      const imageEmbedCache = new Map<string, any>();
       
       // 3. Embed a standard font for text fields
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      const loadSignatureImage = async (ref: string): Promise<any | null> => {
+        if (!ref) return null;
+        if (imageEmbedCache.has(ref)) {
+          return imageEmbedCache.get(ref);
+        }
+
+        try {
+          let imageBytes: Uint8Array;
+
+          if (/^https?:\/\//i.test(ref)) {
+            const resp = await fetch(ref);
+            if (!resp.ok) {
+              imageEmbedCache.set(ref, null);
+              return null;
+            }
+            imageBytes = new Uint8Array(await resp.arrayBuffer());
+          } else {
+            imageBytes = new Uint8Array(await downloadFromStorage(ref));
+          }
+
+          let embedded: any;
+          try {
+            embedded = await pdfDoc.embedPng(imageBytes);
+          } catch {
+            embedded = await pdfDoc.embedJpg(imageBytes);
+          }
+          imageEmbedCache.set(ref, embedded);
+          return embedded;
+        } catch (error) {
+          console.error("[PdfService] Error loading signature image:", error);
+          imageEmbedCache.set(ref, null);
+          return null;
+        }
+      };
 
       // Iterate over each signer to embed their fields
       for (const signer of signers) {
@@ -36,37 +91,23 @@ export class PdfService {
         // Filter fields for this document
         // Fallback: If documentId is null/undefined in field, assume it belongs to this doc if doc array is empty or this is the only doc.
         // But more reliably, we just check for match or absence.
-        const documentFields = signer.fields.filter((f: any) => 
-          !f.documentId || f.documentId === documentId
-        );
+        const normalizedTargetDocId = normalizeDocRef(documentId);
+        let documentFields = signer.fields.filter((f: any) => {
+          const fieldDocRef = normalizeDocRef(f.documentId);
+          return !fieldDocRef || fieldDocRef === normalizedTargetDocId;
+        });
+
+        // Backward compatibility for legacy single-document requests where client sent prefixed/local IDs.
+        if (documentFields.length === 0 && totalDocuments === 1) {
+          documentFields = signer.fields;
+        }
 
         if (documentFields.length === 0) continue;
 
-        // If signer has a signature image, we need to fetch it to embed
-        let signatureImageBytes: ArrayBuffer | null = null;
-        let signatureImageEmbed: any = null;
-        
-        // ... (rest of the signature image fetching logic)
-        if (signer.signatureImageUrl) {
-          try {
-            const resp = await fetch(signer.signatureImageUrl);
-            if (resp.ok) {
-              signatureImageBytes = await resp.arrayBuffer();
-              try {
-                signatureImageEmbed = await pdfDoc.embedPng(signatureImageBytes);
-              } catch (e) {
-                signatureImageEmbed = await pdfDoc.embedJpg(signatureImageBytes);
-              }
-            }
-          } catch (error) {
-            console.error(`[PdfService] Error fetching signature image:`, error);
-          }
-        }
-
         // Now process every field for this document
         for (const field of documentFields) {
-          const pageIndex = field.page; // 0-indexed mapped directly
-          if (pageIndex < 0 || pageIndex >= pages.length) {
+          const pageIndex = Number(field.page);
+          if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pages.length) {
              console.warn(`[PdfService] Invalid page index ${pageIndex}`);
              continue;
           }
@@ -74,21 +115,47 @@ export class PdfService {
           const pageW = page.getWidth();
           const pageH = page.getHeight();
 
+          const normalizedW = Number(field.width);
+          const normalizedH = Number(field.height);
+          const normalizedX = Number(field.x);
+          const normalizedY = Number(field.y);
+
+          if (
+            !Number.isFinite(normalizedW) ||
+            !Number.isFinite(normalizedH) ||
+            !Number.isFinite(normalizedX) ||
+            !Number.isFinite(normalizedY) ||
+            normalizedW <= 0 ||
+            normalizedH <= 0
+          ) {
+            console.warn(`[PdfService] Invalid field geometry for ${field.fieldId ?? "unknown"}`);
+            continue;
+          }
+
           // Calculate absolute dimensions (points)
-          const fieldW = field.width * pageW;
-          const fieldH = field.height * pageH;
+          const fieldW = normalizedW * pageW;
+          const fieldH = normalizedH * pageH;
 
           // x is straightforward
-          const x = field.x * pageW;
+          const x = normalizedX * pageW;
 
           // y needs to be converted from Top-Left to Bottom-Left
           // In Top-Left, y = 0 is the top of the page.
           // In Bottom-Left, y = pageH is the top of the page.
           // So pdf_y = pageH - (top_left_y) - fieldHeight
-          const top_left_y = field.y * pageH;
+          const top_left_y = normalizedY * pageH;
           const y = pageH - top_left_y - fieldH;
 
           if (field.type === "signature" || field.type === "initials") {
+            const imageRef =
+              typeof field.value === "string" && field.value.trim().length > 0
+                ? field.value.trim()
+                : signer.signatureImageUrl;
+
+            const signatureImageEmbed = imageRef
+              ? await loadSignatureImage(imageRef)
+              : null;
+
             if (signatureImageEmbed) {
               page.drawImage(signatureImageEmbed, {
                 x,
@@ -106,8 +173,8 @@ export class PdfService {
                   color: rgb(0, 0, 0),
                });
             }
-          } else if (field.type === "textbox" || field.type === "dateSigned") {
-             const textValue = field.value || (field.type === "dateSigned" ? new Date().toLocaleDateString() : "");
+           } else if (field.type === "textbox") {
+             const textValue = String(field.value ?? "");
              
              // Draw text box
              // A simple heuristic for font size based on box height wrapper

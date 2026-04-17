@@ -10,6 +10,43 @@ import { sendDocumentCompletedEmail } from "./email.service.js";
 const notifRepo = new NotificationRepository();
 const activityService = new ActivityService();
 
+const asFiniteNumber = (value: unknown, fallback: unknown): unknown =>
+  typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+const mergeSignerFields = (
+  existingFields: any[] = [],
+  submittedFields: any[] = [],
+): any[] => {
+  const byId = new Map<string, any>();
+
+  for (const field of existingFields) {
+    if (!field?.fieldId) continue;
+    byId.set(field.fieldId, { ...field });
+  }
+
+  for (const submitted of submittedFields) {
+    if (!submitted?.fieldId) continue;
+    const base = byId.get(submitted.fieldId) ?? {};
+
+    byId.set(submitted.fieldId, {
+      ...base,
+      ...submitted,
+      fieldId: submitted.fieldId,
+      type: submitted.type ?? base.type,
+      documentId: submitted.documentId ?? base.documentId,
+      page: asFiniteNumber(submitted.page, base.page),
+      x: asFiniteNumber(submitted.x, base.x),
+      y: asFiniteNumber(submitted.y, base.y),
+      width: asFiniteNumber(submitted.width, base.width),
+      height: asFiniteNumber(submitted.height, base.height),
+      value: submitted.value ?? base.value,
+      isRequired: submitted.isRequired ?? base.isRequired,
+    });
+  }
+
+  return Array.from(byId.values());
+};
+
 export class SignatureService {
   /**
    * Processes a signature submission, updates document state, and handles notifications.
@@ -51,7 +88,7 @@ export class SignatureService {
           status: "signed",
           signedAt: Timestamp.now(),
           signatureImageUrl: params.signatureImageUrl ?? s.signatureImageUrl,
-          fields: params.updatedFields,
+          fields: mergeSignerFields(s.fields, params.updatedFields),
           ipAddress: params.ipAddress ?? null,
           tokenUsed: true,
           signerUid: params.signerUid ?? s.signerUid, // Preserve or update UID
@@ -170,6 +207,7 @@ export class SignatureService {
             storagePath: doc.storagePath,
             documentId: doc.documentId,
             signers: dataForPdfGeneration.updatedSigners,
+            totalDocuments: updatedDocuments.length,
           });
 
           // Upload to a new path to preserve the original master document

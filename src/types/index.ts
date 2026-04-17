@@ -55,7 +55,7 @@ export interface SignedUrlResponse {
 // Signature field placed on PDF
 export interface SignatureFieldPayload {
   fieldId: string;
-  type: "signature" | "initials" | "dateSigned" | "textbox";
+  type: "signature" | "initials" | "textbox";
   documentId: string;
   page: number;
   x: number;
