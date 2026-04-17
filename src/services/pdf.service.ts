@@ -133,8 +133,26 @@ export class PdfService {
           }
 
           // Calculate absolute dimensions (points)
-          const fieldW = normalizedW * pageW;
-          const fieldH = normalizedH * pageH;
+          // Match signing UI dimension constraints for better visual parity.
+          const isRect = field.type === "textbox";
+          const isSignature = field.type === "signature";
+          const maxSigW = 120;
+          const maxFieldW = 50;
+          const maxFieldH = 50;
+          const maxRectW = 100;
+          const maxRectH = 28;
+
+          const rawFieldW = normalizedW * pageW;
+          const rawFieldH = normalizedH * pageH;
+
+          const fieldW = Math.min(
+            Math.max(rawFieldW, 20),
+            isSignature ? maxSigW : isRect ? maxRectW : maxFieldW,
+          );
+          const fieldH = Math.min(
+            Math.max(rawFieldH, 20),
+            isRect ? maxRectH : maxFieldH,
+          );
 
           // x is straightforward
           const x = normalizedX * pageW;
