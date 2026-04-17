@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { getFirestore } from "./firebase.service.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { NotificationRepository } from "./notification.service.js";
@@ -161,6 +160,7 @@ export class SignatureService {
       try {
         const pdfService = new PdfService();
         const updatedDocuments = [...dataForPdfGeneration.documents];
+        let totalCompletedSizeMB = 0;
 
         for (let i = 0; i < updatedDocuments.length; i++) {
           const doc = updatedDocuments[i];
@@ -198,22 +198,16 @@ export class SignatureService {
             documentUrl: newDocumentUrl,
           };
 
-          // File into owner's library
-          try {
-            await this._fileCompletedDocumentForOwner({
-              db,
-              ownerUid: dataForPdfGeneration.requestedByUid,
-              documentName: doc.documentName,
-              storagePath: newStoragePath,
-              documentUrl: newDocumentUrl,
-              fileSizeMB: buffer.length / (1024 * 1024),
-              requestId: dataForPdfGeneration.requestId,
-              totalDocs: updatedDocuments.length,
-            });
-          } catch (filingError) {
-            console.error(`[SignatureService] Failed to file doc ${doc.documentId}:`, filingError);
-          }
+          totalCompletedSizeMB += buffer.length / (1024 * 1024);
         }
+
+        // Keep storage accounting even though completed docs are no longer filed into Requests folders.
+        await db
+          .collection("users")
+          .doc(dataForPdfGeneration.requestedByUid)
+          .update({
+            usedStorageMB: FieldValue.increment(totalCompletedSizeMB),
+          });
 
         // Update the Firestore database to point to the new flattened documents
         await requestRef.update({
@@ -259,128 +253,5 @@ export class SignatureService {
         );
       }
     }
-  }
-
-  /**
-   * Creates a Requests/{documentName} folder hierarchy for the request owner
-   * and saves the flattened PDF as a Firestore document record.
-   */
-  private async _fileCompletedDocumentForOwner(params: {
-    db: FirebaseFirestore.Firestore;
-    ownerUid: string;
-    documentName: string;
-    storagePath: string;
-    documentUrl: string;
-    fileSizeMB: number;
-    requestId: string;
-    totalDocs: number;
-  }): Promise<void> {
-    const { db, ownerUid, documentName, storagePath, documentUrl, fileSizeMB, requestId, totalDocs } =
-      params;
-    const now = FieldValue.serverTimestamp();
-
-    // 1. Find or create the "Requests" root folder
-    const requestsFolderSnap = await db
-      .collection("folders")
-      .where("ownerUid", "==", ownerUid)
-      .where("parentId", "==", null)
-      .where("name", "==", "Requests")
-      .limit(1)
-      .get();
-
-    let requestsFolderId: string;
-
-    if (!requestsFolderSnap.empty) {
-      requestsFolderId = requestsFolderSnap.docs[0].id;
-    } else {
-      requestsFolderId = uuidv4();
-      await db
-        .collection("folders")
-        .doc(requestsFolderId)
-        .set({
-          ownerUid,
-          name: "Requests",
-          parentId: null,
-          itemCount: 0,
-          createdAt: now,
-          updatedAt: now,
-        });
-      console.log(
-        `[SignatureService] Created "Requests" folder: ${requestsFolderId}`,
-      );
-    }
-
-    // 2. Create a subfolder for the request (use requestId or formatted name)
-    const requestFolderSnap = await db
-      .collection("signature_requests")
-      .doc(requestId)
-      .get();
-    const requestName = requestFolderSnap.data()?.documentName || "Request";
-    const subFolderName = totalDocs > 1 
-      ? `${requestName} (Request ID: ${requestId.slice(0, 8)})`
-      : requestName.replace(/\.pdf$/i, "");
-      
-    const subFolderId = `folder_${requestId}`; // Deterministic ID per request
-    const subFolderRef = db.collection("folders").doc(subFolderId);
-    const subFolderDoc = await subFolderRef.get();
-
-    if (!subFolderDoc.exists) {
-      await subFolderRef.set({
-        ownerUid,
-        name: subFolderName,
-        parentId: requestsFolderId,
-        itemCount: 0,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      // Update parent item count
-      await db
-        .collection("folders")
-        .doc(requestsFolderId)
-        .update({
-          itemCount: FieldValue.increment(1),
-          updatedAt: now,
-        });
-    }
-
-    // 3. Create a documents record for the flattened PDF
-    const docId = uuidv4();
-    const completedName = documentName.replace(/\.pdf$/i, "_completed.pdf");
-
-    await db.collection("documents").doc(docId).set({
-      ownerUid,
-      name: completedName,
-      fileUrl: storagePath,
-      storagePath: storagePath,
-      fileType: "pdf",
-      fileSizeMB,
-      status: "completed",
-      folderId: subFolderId,
-      authorizedEmails: [],
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    // Update subfolder item count
-    await db
-      .collection("folders")
-      .doc(subFolderId)
-      .update({
-        itemCount: FieldValue.increment(1),
-        updatedAt: now,
-      });
-
-    // 4. Update owner's usedStorageMB
-    await db
-      .collection("users")
-      .doc(ownerUid)
-      .update({
-        usedStorageMB: FieldValue.increment(fileSizeMB),
-      });
-
-    console.log(
-      `[SignatureService] Filed completed doc "${completedName}" in Requests/${subFolderName} for ${ownerUid}`,
-    );
   }
 }
