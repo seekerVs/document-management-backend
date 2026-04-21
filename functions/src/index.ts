@@ -70,4 +70,11 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });
 
+if (process.env.NODE_ENV === "production") {
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+  });
+}
+
 export const api = onRequest(app);
