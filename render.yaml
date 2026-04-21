@@ -2,6 +2,7 @@ services:
   - type: web
     name: document-management-backend
     env: node
+    rootDir: functions
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
