@@ -70,7 +70,8 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });
 
-if (process.env.NODE_ENV === "production") {
+// Start the server only when not in a Firebase Function environment
+if (!process.env.FUNCTION_TARGET) {
   const port = process.env.PORT || 3000;
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
