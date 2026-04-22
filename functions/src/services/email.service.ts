@@ -21,7 +21,7 @@ const footerHtml = (requesterName?: string) => `
     <p style="margin: 0 0 4px; font-weight: bold; color: #141C23;">Do Not Share This Email</p>
     <p style="margin: 0 0 16px;">This email contains a secure link to Scrivener. Please do not share this email or link with others.</p>
     <p style="margin: 0 0 16px;">Copyright &copy; ${new Date().getFullYear()} Scrivener. All rights reserved.</p>
-    ${requesterName ? `<p style="margin: 0;">This message was sent to you by ${requesterName}. If you would rather not receive email from this sender you may contact the sender with your request.</p>` : ""}
+    ${requesterName ? `<p style="margin: 0;">This message is sent to you byy ${requesterName}. If you would rather not receive email from this sender you may contact the sender with your request.</p>` : ""}
   </div>
 `;
 

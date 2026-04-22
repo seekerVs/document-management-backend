@@ -1,9 +1,6 @@
 services:
   - type: web
     name: document-management-backend
-    env: docker
-    dockerfilePath: ./functions/Dockerfile
-    dockerContext: ./functions
     env: node
     rootDir: functions
     buildCommand: npm install && npm run build

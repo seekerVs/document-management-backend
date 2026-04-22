@@ -23,10 +23,15 @@
     "format:check": "prettier --check \"src/**/*.{ts,js}\""
   },
   "dependencies": {
+    "@effect/platform": "^0.94.5",
+    "@effect/platform-node": "^0.104.0",
     "@getbrevo/brevo": "^5.0.1",
+    "@matbee/libreoffice-converter": "^2.6.0",
     "@supabase/supabase-js": "^2.99.3",
     "cors": "2.8.6",
     "dotenv": "^16.4.5",
+    "effect": "^3.19.19",
+    "effect-libreoffice": "^2.0.0-dev",
     "express": "5.2.1",
     "express-rate-limit": "8.3.1",
     "firebase-admin": "^13.7.0",

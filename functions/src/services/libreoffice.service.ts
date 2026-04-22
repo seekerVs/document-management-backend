@@ -1,13 +1,6 @@
-import { spawn } from "node:child_process";
-import {
-  access,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
 import path from "node:path";
+import { Effect } from "effect";
+import { LibreOffice } from "effect-libreoffice";
 import { environment } from "../config/environment.js";
 
 export type LibreOfficeConversionErrorCode =
@@ -33,18 +26,14 @@ interface ConvertToPdfParams {
 }
 
 export class LibreOfficeService {
-  private readonly binaryPath: string;
   private readonly timeoutMs: number;
-  private readonly tempRootDir: string;
   private readonly maxConcurrency: number;
 
   private active = 0;
   private readonly waiters: Array<() => void> = [];
 
   constructor() {
-    this.binaryPath = environment.libreOfficeBinaryPath;
     this.timeoutMs = environment.libreOfficeTimeoutMs;
-    this.tempRootDir = environment.libreOfficeTempDir;
     this.maxConcurrency = environment.libreOfficeMaxConcurrency;
   }
 
@@ -55,156 +44,116 @@ export class LibreOfficeService {
   }: ConvertToPdfParams): Promise<Buffer> {
     await this.acquireSlot();
 
-    let workDir = "";
-
     try {
-      await mkdir(this.tempRootDir, { recursive: true });
-      workDir = await mkdtemp(path.join(this.tempRootDir, "job-"));
-
-      const safeInputName = this.sanitizeInputFileName(fileName);
-      const inputPath = path.join(workDir, safeInputName);
-      const outputName = `${path.basename(safeInputName, path.extname(safeInputName))}.pdf`;
-      const outputPath = path.join(workDir, outputName);
-
-      await writeFile(inputPath, fileBuffer);
-
-      const stderr = await this.runLibreOffice(inputPath, workDir);
-
-      await access(outputPath).catch(() => {
-        throw new LibreOfficeConversionError(
-          "INVALID_OUTPUT",
-          "LibreOffice did not produce a PDF output file."
-        );
-      });
-
-      const pdfBytes = await readFile(outputPath);
+      const conversionResult = await this.runConversionWithTimeout(
+        fileBuffer,
+        fileName
+      );
+      const pdfBytes = Buffer.from(conversionResult.data);
 
       if (!this.looksLikePdf(pdfBytes)) {
         throw new LibreOfficeConversionError(
           "INVALID_OUTPUT",
-          "LibreOffice output is not a valid PDF."
+          "Converter output is not a valid PDF."
         );
       }
 
-      if (stderr.trim().length > 0) {
-        console.warn(
-          `[LibreOfficeService] conversion warnings trace=${trace ?? "n/a"}: ${stderr.trim()}`
+      if (trace) {
+        console.log(
+          `[LibreOfficeService] conversion completed trace=${trace} output=${conversionResult.filename}`
         );
       }
 
       return pdfBytes;
+    } catch (error) {
+      throw this.mapConversionError(error);
     } finally {
-      if (workDir) {
-        await rm(workDir, { recursive: true, force: true });
-      }
       this.releaseSlot();
     }
   }
 
-  private async runLibreOffice(
-    inputPath: string,
-    outDir: string
-  ): Promise<string> {
-    const args = [
-      "--headless",
-      "--nologo",
-      "--nodefault",
-      "--nofirststartwizard",
-      "--nolockcheck",
-      "--convert-to",
-      "pdf:writer_pdf_Export",
-      "--outdir",
-      outDir,
-      inputPath,
-    ];
+  private async runConversionWithTimeout(
+    fileBuffer: Buffer,
+    fileName: string
+  ): Promise<{ data: Uint8Array; filename: string }> {
+    const inputFormat = this.inferInputFormat(fileName);
+    const conversionEffect = Effect.gen(function* () {
+      const libre = yield* LibreOffice.LibreOffice;
+      return yield* libre.convert(
+        fileBuffer,
+        {
+          outputFormat: "pdf",
+          ...(inputFormat ? { inputFormat } : {}),
+        },
+        fileName
+      );
+    }).pipe(Effect.provide(LibreOffice.layer));
 
-    return await new Promise<string>((resolve, reject) => {
-      const child = spawn(this.binaryPath, args, { windowsHide: true });
-
-      let stderr = "";
-      let timeoutTriggered = false;
-      let hardKillTimer: NodeJS.Timeout | null = null;
-
-      const timeout = setTimeout(() => {
-        timeoutTriggered = true;
-        child.kill("SIGTERM");
-        hardKillTimer = setTimeout(() => {
-          child.kill("SIGKILL");
-        }, 2_000);
-      }, this.timeoutMs);
-
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString("utf8");
-      });
-
-      child.on("error", (error) => {
-        clearTimeout(timeout);
-        if (hardKillTimer) clearTimeout(hardKillTimer);
-
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          reject(
-            new LibreOfficeConversionError(
-              "NO_BINARY",
-              `LibreOffice binary not found: ${this.binaryPath}`
-            )
-          );
-          return;
-        }
-
+    const conversionPromise = Effect.runPromise(conversionEffect);
+    let timer: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
         reject(
           new LibreOfficeConversionError(
-            "CONVERSION_FAILED",
-            `Failed to start LibreOffice process: ${error.message}`
+            "TIMEOUT",
+            `Conversion timed out after ${this.timeoutMs}ms.`
           )
         );
-      });
-
-      child.on("close", (code) => {
-        clearTimeout(timeout);
-        if (hardKillTimer) clearTimeout(hardKillTimer);
-
-        if (timeoutTriggered) {
-          reject(
-            new LibreOfficeConversionError(
-              "TIMEOUT",
-              `LibreOffice conversion timed out after ${this.timeoutMs}ms.`
-            )
-          );
-          return;
-        }
-
-        if (code !== 0) {
-          const normalized = stderr.toLowerCase();
-          const isLikelyInputIssue =
-            normalized.includes("source file could not be loaded") ||
-            normalized.includes("general input/output error") ||
-            normalized.includes("password") ||
-            normalized.includes("corrupt") ||
-            normalized.includes("cannot be loaded");
-
-          reject(
-            new LibreOfficeConversionError(
-              isLikelyInputIssue ? "UNPROCESSABLE" : "CONVERSION_FAILED",
-              `LibreOffice conversion failed (exit ${code}). ${stderr.trim() || "No stderr output."}`
-            )
-          );
-          return;
-        }
-
-        resolve(stderr);
-      });
+      }, this.timeoutMs);
     });
+
+    try {
+      return await Promise.race([conversionPromise, timeoutPromise]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
-  private sanitizeInputFileName(value: string): string {
-    /**
-     * Sanitizes the input filename to prevent issues with special characters.
-     * @param value - The original filename
-     * @returns A safe filename with special characters removed or replaced
-     */
-    const base = value.trim().replace(/[\\/:*?"<>|]+/g, "_");
-    if (!base) return "document.docx";
-    return base;
+  private inferInputFormat(fileName: string): "doc" | "docx" | undefined {
+    const ext = path.extname(fileName).replace(".", "").toLowerCase();
+    if (ext === "doc" || ext === "docx") {
+      return ext;
+    }
+    return undefined;
+  }
+
+  private mapConversionError(error: unknown): Error {
+    if (error instanceof LibreOfficeConversionError) {
+      return error;
+    }
+
+    if (error instanceof LibreOffice.LibreOfficeError) {
+      switch (error.code) {
+        case "CORRUPTED_DOCUMENT":
+        case "PASSWORD_REQUIRED":
+        case "INVALID_INPUT":
+        case "UNSUPPORTED_FORMAT":
+          return new LibreOfficeConversionError("UNPROCESSABLE", error.message);
+        case "WASM_NOT_INITIALIZED":
+        case "LOAD_FAILED":
+        case "PEER_DEPENDENCY_IMPORT_FAILED":
+          return new LibreOfficeConversionError(
+            "NO_BINARY",
+            "WASM converter is not configured correctly."
+          );
+        case "CONVERSION_FAILED":
+        case "UNKNOWN":
+        default:
+          return new LibreOfficeConversionError(
+            "CONVERSION_FAILED",
+            error.message
+          );
+      }
+    }
+
+    if (error instanceof Error) {
+      return new LibreOfficeConversionError("CONVERSION_FAILED", error.message);
+    }
+
+    return new LibreOfficeConversionError(
+      "CONVERSION_FAILED",
+      "Unknown conversion error."
+    );
   }
 
   private looksLikePdf(bytes: Buffer): boolean {

@@ -1,6 +1,4 @@
 import "dotenv/config";
-import os from "node:os";
-import path from "node:path";
 
 const parseCsv = (value: string | undefined): string[] =>
   (value ?? "")
@@ -19,12 +17,7 @@ export const environment = {
   brevoApiKey: process.env.BREVO_API_KEY ?? "",
   emailFromName: process.env.EMAIL_FROM_NAME ?? "Scrivener",
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS ?? "",
-  libreOfficeBinaryPath:
-    process.env.LIBREOFFICE_BIN_PATH ??
-    (process.platform === "win32" ? "soffice" : "libreoffice"),
   libreOfficeTimeoutMs: toNumber(process.env.LIBREOFFICE_TIMEOUT_MS, 45_000),
-  libreOfficeTempDir:
-    process.env.TEMP_FILE_DIR ?? path.join(os.tmpdir(), "dms-conversions"),
   libreOfficeMaxConcurrency: Math.max(
     1,
     toNumber(process.env.LIBREOFFICE_MAX_CONCURRENCY, 2)
