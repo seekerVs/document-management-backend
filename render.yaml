@@ -8,8 +8,3 @@ services:
     rootDir: functions
     buildCommand: npm install && npm run build
     startCommand: node lib/index.js
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 3000
