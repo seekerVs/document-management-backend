@@ -1,6 +1,9 @@
 import path from "node:path";
-import { Effect } from "effect";
-import { LibreOffice } from "effect-libreoffice";
+import {
+  createConverter,
+  type LibreOfficeConverter,
+} from "@matbee/libreoffice-converter/server";
+import { ConversionError } from "@matbee/libreoffice-converter";
 import { environment } from "../config/environment.js";
 
 export type LibreOfficeConversionErrorCode =
@@ -32,9 +35,29 @@ export class LibreOfficeService {
   private active = 0;
   private readonly waiters: Array<() => void> = [];
 
+  /**
+   * Singleton converter – initialized once on first use and reused for all
+   * subsequent requests. Re-creating it per-request would load ~247 MB of
+   * WASM data every time and cause OOM / timeout failures on constrained
+   * hosting environments (e.g. Render free tier).
+   */
+  private converterPromise: Promise<LibreOfficeConverter> | null = null;
+
   constructor() {
     this.timeoutMs = environment.libreOfficeTimeoutMs;
     this.maxConcurrency = environment.libreOfficeMaxConcurrency;
+  }
+
+  private getConverter(): Promise<LibreOfficeConverter> {
+    if (!this.converterPromise) {
+      console.log("[LibreOfficeService] Initializing WASM converter (once)...");
+      this.converterPromise = createConverter().catch((err) => {
+        // Reset so the next request can retry initialization.
+        this.converterPromise = null;
+        throw err;
+      });
+    }
+    return this.converterPromise;
   }
 
   async convertToPdfWithLibreOffice({
@@ -45,11 +68,12 @@ export class LibreOfficeService {
     await this.acquireSlot();
 
     try {
-      const conversionResult = await this.runConversionWithTimeout(
+      const converter = await this.getConverter();
+      const pdfBytes = await this.runConversionWithTimeout(
+        converter,
         fileBuffer,
         fileName
       );
-      const pdfBytes = Buffer.from(conversionResult.data);
 
       if (!this.looksLikePdf(pdfBytes)) {
         throw new LibreOfficeConversionError(
@@ -60,7 +84,7 @@ export class LibreOfficeService {
 
       if (trace) {
         console.log(
-          `[LibreOfficeService] conversion completed trace=${trace} output=${conversionResult.filename}`
+          `[LibreOfficeService] conversion completed trace=${trace} size=${pdfBytes.length}`
         );
       }
 
@@ -73,23 +97,19 @@ export class LibreOfficeService {
   }
 
   private async runConversionWithTimeout(
+    converter: LibreOfficeConverter,
     fileBuffer: Buffer,
     fileName: string
-  ): Promise<{ data: Uint8Array; filename: string }> {
+  ): Promise<Buffer> {
     const inputFormat = this.inferInputFormat(fileName);
-    const conversionEffect = Effect.gen(function* () {
-      const libre = yield* LibreOffice.LibreOffice;
-      return yield* libre.convert(
-        fileBuffer,
-        {
-          outputFormat: "pdf",
-          ...(inputFormat ? { inputFormat } : {}),
-        },
-        fileName
-      );
-    }).pipe(Effect.provide(LibreOffice.layer));
 
-    const conversionPromise = Effect.runPromise(conversionEffect);
+    const conversionPromise = converter
+      .convert(fileBuffer, {
+        outputFormat: "pdf",
+        ...(inputFormat ? { inputFormat } : {}),
+      })
+      .then((result) => Buffer.from(result.data));
+
     let timer: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
@@ -122,7 +142,7 @@ export class LibreOfficeService {
       return error;
     }
 
-    if (error instanceof LibreOffice.LibreOfficeError) {
+    if (error instanceof ConversionError) {
       switch (error.code) {
         case "CORRUPTED_DOCUMENT":
         case "PASSWORD_REQUIRED":
@@ -131,7 +151,6 @@ export class LibreOfficeService {
           return new LibreOfficeConversionError("UNPROCESSABLE", error.message);
         case "WASM_NOT_INITIALIZED":
         case "LOAD_FAILED":
-        case "PEER_DEPENDENCY_IMPORT_FAILED":
           return new LibreOfficeConversionError(
             "NO_BINARY",
             "WASM converter is not configured correctly."
@@ -157,11 +176,6 @@ export class LibreOfficeService {
   }
 
   private looksLikePdf(bytes: Buffer): boolean {
-    /**
-     * Validates that a buffer contains a valid PDF by checking the PDF header signature.
-     * @param bytes - The file buffer to validate
-     * @returns True if the buffer appears to be a valid PDF
-     */
     if (bytes.length < 4) return false;
     return (
       bytes[0] === 0x25 &&
@@ -172,10 +186,6 @@ export class LibreOfficeService {
   }
 
   private async acquireSlot(): Promise<void> {
-    /**
-     * Acquires a concurrency slot for LibreOffice conversion.
-     * Waits if maximum concurrency is reached.
-     */
     if (this.active < this.maxConcurrency) {
       this.active += 1;
       return;
@@ -186,9 +196,6 @@ export class LibreOfficeService {
   }
 
   private releaseSlot(): void {
-    /**
-     * Releases a concurrency slot and processes the next queued operation if any.
-     */
     this.active = Math.max(0, this.active - 1);
     const next = this.waiters.shift();
     if (next) next();
