@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
 import { environment } from "../config/environment.js";
 
 export type LibreOfficeConversionErrorCode =
@@ -88,7 +88,7 @@ export class LibreOfficeService {
       return error;
     }
 
-    if (axios.isAxiosError(error)) {
+    if (isAxiosError(error)) {
       const status = error.response?.status;
       const message = error.response?.data?.toString() || error.message;
 
