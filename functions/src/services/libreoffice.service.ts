@@ -1,7 +1,9 @@
 import path from "node:path";
+// @ts-expect-error - wasmLoader lacks type declarations in the package but is required for initialization in this environment.
+import wasmLoader from "@matbee/libreoffice-converter/wasm/loader.cjs";
 import {
-  createConverter,
-  type LibreOfficeConverter,
+  createWorkerConverter,
+  type ILibreOfficeConverter,
 } from "@matbee/libreoffice-converter/server";
 import { ConversionError } from "@matbee/libreoffice-converter";
 import { environment } from "../config/environment.js";
@@ -40,18 +42,25 @@ export class LibreOfficeService {
    * subsequent requests. Re-creating it per-request would load ~247 MB of
    * WASM data every time and cause OOM / timeout failures on constrained
    * hosting environments (e.g. Render free tier).
+   * 
+   * We use the Worker-based converter to avoid blocking the Node.js event loop
+   * during intensive WASM conversion tasks.
    */
-  private converterPromise: Promise<LibreOfficeConverter> | null = null;
+  private converterPromise: Promise<ILibreOfficeConverter> | null = null;
 
   constructor() {
     this.timeoutMs = environment.libreOfficeTimeoutMs;
     this.maxConcurrency = environment.libreOfficeMaxConcurrency;
   }
 
-  private getConverter(): Promise<LibreOfficeConverter> {
+  private getConverter(): Promise<ILibreOfficeConverter> {
     if (!this.converterPromise) {
-      console.log("[LibreOfficeService] Initializing WASM converter (once)...");
-      this.converterPromise = createConverter().catch((err) => {
+      console.log("[LibreOfficeService] Initializing Worker-based WASM converter (once)...");
+      
+      // Providing the wasmLoader explicitly is required for bundler compatibility 
+      // and in environments where dynamic requires are restricted.
+      this.converterPromise = createWorkerConverter({ wasmLoader }).catch((err) => {
+        console.error("[LibreOfficeService] Initialization failed:", err);
         // Reset so the next request can retry initialization.
         this.converterPromise = null;
         throw err;
@@ -97,7 +106,7 @@ export class LibreOfficeService {
   }
 
   private async runConversionWithTimeout(
-    converter: LibreOfficeConverter,
+    converter: ILibreOfficeConverter,
     fileBuffer: Buffer,
     fileName: string
   ): Promise<Buffer> {
