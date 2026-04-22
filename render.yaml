@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: document-management-backend
+    env: docker
+    dockerfilePath: ./functions/Dockerfile
+    dockerContext: ./functions
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
