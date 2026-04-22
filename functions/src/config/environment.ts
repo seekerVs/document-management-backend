@@ -1,10 +1,16 @@
 import "dotenv/config";
 
-const parseCsv = (value: string | undefined): string[] =>
-  (value ?? "")
+const parseCsv = (value: string | undefined): string[] => {
+  let raw = value ?? "";
+  // Robustness: strip accidental key prefix if it exists in the value
+  if (raw.startsWith("ALLOWED_ORIGINS=")) {
+    raw = raw.replace("ALLOWED_ORIGINS=", "");
+  }
+  return raw
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+};
 
 const toNumber = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);

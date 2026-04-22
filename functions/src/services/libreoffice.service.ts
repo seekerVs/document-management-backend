@@ -2,7 +2,7 @@ import path from "node:path";
 // @ts-expect-error - wasmLoader lacks type declarations in the package but is required for initialization in this environment.
 import wasmLoader from "@matbee/libreoffice-converter/wasm/loader";
 import {
-  createWorkerConverter,
+  createSubprocessConverter,
   type ILibreOfficeConverter,
 } from "@matbee/libreoffice-converter/server";
 import { ConversionError } from "@matbee/libreoffice-converter";
@@ -39,29 +39,34 @@ export class LibreOfficeService {
 
   /**
    * Singleton converter – initialized once on first use and reused for all
-   * subsequent requests. Re-creating it per-request would load ~247 MB of
-   * WASM data every time and cause OOM / timeout failures on constrained
-   * hosting environments (e.g. Render free tier).
+   * subsequent requests. 
    * 
-   * We use the Worker-based converter to avoid blocking the Node.js event loop
-   * during intensive WASM conversion tasks.
+   * We use the Subprocess-based converter for Render.com's memory-constrained 
+   * environment (512MB). It runs the WASM module in a separate process, 
+   * allowing for automatic restarts on memory errors without crashing the 
+   * main web server.
    */
   private converterPromise: Promise<ILibreOfficeConverter> | null = null;
 
   constructor() {
     this.timeoutMs = environment.libreOfficeTimeoutMs;
-    this.maxConcurrency = environment.libreOfficeMaxConcurrency;
+    // On 512MB RAM, we force maxConcurrency to 1 to avoid OOM
+    this.maxConcurrency = 1; 
   }
 
   private getConverter(): Promise<ILibreOfficeConverter> {
     if (!this.converterPromise) {
-      console.log("[LibreOfficeService] Initializing Worker-based WASM converter (once)...");
+      console.log("[LibreOfficeService] Initializing Subprocess-based WASM converter...");
       
-      // Providing the wasmLoader explicitly is required for bundler compatibility 
-      // and in environments where dynamic requires are restricted.
-      this.converterPromise = createWorkerConverter({ wasmLoader }).catch((err) => {
+      this.converterPromise = createSubprocessConverter({ 
+        wasmLoader,
+        // Explicitly set the path to WASM files to avoid auto-detection issues on Render
+        wasmPath: (wasmLoader as any).wasmDir,
+        verbose: true,
+        maxInitRetries: 3,
+        restartOnMemoryError: true
+      }).catch((err) => {
         console.error("[LibreOfficeService] Initialization failed:", err);
-        // Reset so the next request can retry initialization.
         this.converterPromise = null;
         throw err;
       });
