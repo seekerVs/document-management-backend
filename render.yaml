@@ -4,6 +4,10 @@ services:
     env: docker
     dockerfilePath: ./functions/Dockerfile
     dockerContext: ./functions
+    env: node
+    rootDir: functions
+    buildCommand: npm install && npm run build
+    startCommand: node lib/index.js
     envVars:
       - key: NODE_ENV
         value: production
