@@ -1,3 +1,4 @@
+import path from "node:path";
 import axios, { isAxiosError } from "axios";
 import { environment } from "../config/environment.js";
 
@@ -24,16 +25,15 @@ interface ConvertToPdfParams {
 }
 
 /**
- * Service to handle document conversion using a remote Gotenberg instance.
- * This approach is much more stable than running WASM locally in a 
- * memory-constrained environment like Render Free Tier.
+ * Service to handle document conversion using ConvertAPI.
+ * This is a highly reliable cloud-based solution that bypasses 
+ * the memory limitations of Render.com.
  */
 export class LibreOfficeService {
-  private readonly gotenbergUrl: string;
+  private readonly secret: string;
 
   constructor() {
-    // Ensure URL doesn't have trailing slash for consistency
-    this.gotenbergUrl = environment.gotenbergUrl.replace(/\/$/, "");
+    this.secret = environment.convertApiSecret;
   }
 
   async convertToPdfWithLibreOffice({
@@ -42,34 +42,44 @@ export class LibreOfficeService {
     trace,
   }: ConvertToPdfParams): Promise<Buffer> {
     try {
-      if (trace) {
-        console.log(`[LibreOfficeService] Sending to Gotenberg: ${fileName} (trace=${trace})`);
+      if (!this.secret) {
+        throw new LibreOfficeConversionError("NO_BINARY", "ConvertAPI Secret is not configured.");
       }
 
-      // Gotenberg 8 LibreOffice conversion endpoint
-      const endpoint = `${this.gotenbergUrl}/forms/libreoffice/convert`;
+      if (trace) {
+        console.log(`[LibreOfficeService] Sending to ConvertAPI: ${fileName} (trace=${trace})`);
+      }
+
+      const extension = path.extname(fileName).toLowerCase().replace(".", "") || "docx";
+      // ConvertAPI endpoint format: /convert/{format}/to/pdf
+      const endpoint = `https://v2.convertapi.com/convert/${extension}/to/pdf?Secret=${this.secret}`;
       
       const formData = new FormData();
-      // Gotenberg expects 'files' field for the document
-      // Convert Buffer to Uint8Array for Blob compatibility
+      // ConvertAPI expects the file in the 'File' field
       const blob = new Blob([new Uint8Array(fileBuffer)]);
-      formData.append("files", blob, fileName);
+      formData.append("File", blob, fileName);
 
       const response = await axios.post(endpoint, formData, {
-        responseType: "arraybuffer",
         headers: {
           "Content-Type": "multipart/form-data",
         },
-        // Use the configured timeout
         timeout: environment.libreOfficeTimeoutMs,
       });
 
-      const pdfBytes = Buffer.from(response.data);
+      // ConvertAPI returns a JSON with a Files array
+      const result = response.data;
+      if (!result.Files || result.Files.length === 0) {
+        throw new LibreOfficeConversionError("CONVERSION_FAILED", "ConvertAPI returned no files.");
+      }
+
+      // The file data is returned as a Base64 string
+      const base64Data = result.Files[0].FileData;
+      const pdfBytes = Buffer.from(base64Data, "base64");
 
       if (!this.looksLikePdf(pdfBytes)) {
         throw new LibreOfficeConversionError(
           "INVALID_OUTPUT",
-          "Gotenberg output is not a valid PDF."
+          "ConvertAPI output is not a valid PDF."
         );
       }
 
@@ -90,19 +100,22 @@ export class LibreOfficeService {
 
     if (isAxiosError(error)) {
       const status = error.response?.status;
-      const message = error.response?.data?.toString() || error.message;
+      // ConvertAPI often returns error details in JSON
+      const message = error.response?.data?.Message || error.message;
 
-      console.error(`[LibreOfficeService] Gotenberg error (${status}):`, message);
+      console.error(`[LibreOfficeService] ConvertAPI error (${status}):`, message);
 
+      if (status === 401) {
+        return new LibreOfficeConversionError("NO_BINARY", "Invalid ConvertAPI Secret.");
+      }
+      if (status === 402) {
+        return new LibreOfficeConversionError("CONVERSION_FAILED", "ConvertAPI credit limit exceeded.");
+      }
       if (status === 415 || status === 422) {
-        return new LibreOfficeConversionError("UNPROCESSABLE", "The file format is not supported or the file is corrupted.");
+        return new LibreOfficeConversionError("UNPROCESSABLE", "Unsupported file format or corrupted file.");
       }
       
-      if (error.code === "ECONNABORTED") {
-        return new LibreOfficeConversionError("TIMEOUT", "The conversion service timed out.");
-      }
-
-      return new LibreOfficeConversionError("CONVERSION_FAILED", `Conversion service error: ${message}`);
+      return new LibreOfficeConversionError("CONVERSION_FAILED", `ConvertAPI error: ${message}`);
     }
 
     return new LibreOfficeConversionError("CONVERSION_FAILED", error instanceof Error ? error.message : "Unknown error during conversion");

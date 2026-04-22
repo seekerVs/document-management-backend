@@ -31,5 +31,5 @@ export const environment = {
   signingBaseUrl: process.env.SIGNING_BASE_URL ?? "https://your-web-app.com",
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
-  gotenbergUrl: process.env.GOTENBERG_URL ?? "http://localhost:3000",
+  convertApiSecret: process.env.CONVERT_API_SECRET ?? "",
 } as const;
