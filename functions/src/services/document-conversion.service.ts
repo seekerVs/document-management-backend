@@ -2,17 +2,17 @@ import path from "node:path";
 import axios, { isAxiosError } from "axios";
 import { environment } from "../config/environment.js";
 
-export type LibreOfficeConversionErrorCode =
+export type DocumentConversionErrorCode =
   | "TIMEOUT"
   | "NO_BINARY"
   | "UNPROCESSABLE"
   | "CONVERSION_FAILED"
   | "INVALID_OUTPUT";
 
-export class LibreOfficeConversionError extends Error {
-  readonly code: LibreOfficeConversionErrorCode;
+export class DocumentConversionError extends Error {
+  readonly code: DocumentConversionErrorCode;
 
-  constructor(code: LibreOfficeConversionErrorCode, message: string) {
+  constructor(code: DocumentConversionErrorCode, message: string) {
     super(message);
     this.code = code;
   }
@@ -26,34 +26,40 @@ interface ConvertToPdfParams {
 
 /**
  * Service to handle document conversion using ConvertAPI.
- * This is a highly reliable cloud-based solution that bypasses 
+ * This is a highly reliable cloud-based solution that bypasses
  * the memory limitations of Render.com.
  */
-export class LibreOfficeService {
+export class DocumentConversionService {
   private readonly secret: string;
 
   constructor() {
     this.secret = environment.convertApiSecret;
   }
 
-  async convertToPdfWithLibreOffice({
+  async convertToPdf({
     fileBuffer,
     fileName,
     trace,
   }: ConvertToPdfParams): Promise<Buffer> {
     try {
       if (!this.secret) {
-        throw new LibreOfficeConversionError("NO_BINARY", "ConvertAPI Secret is not configured.");
+        throw new DocumentConversionError(
+          "NO_BINARY",
+          "ConvertAPI Secret is not configured."
+        );
       }
 
       if (trace) {
-        console.log(`[LibreOfficeService] Sending to ConvertAPI: ${fileName} (trace=${trace})`);
+        console.log(
+          `[DocumentConversionService] Sending to ConvertAPI: ${fileName} (trace=${trace})`
+        );
       }
 
-      const extension = path.extname(fileName).toLowerCase().replace(".", "") || "docx";
+      const extension =
+        path.extname(fileName).toLowerCase().replace(".", "") || "docx";
       // ConvertAPI endpoint format: /convert/{format}/to/pdf
       const endpoint = `https://v2.convertapi.com/convert/${extension}/to/pdf?Secret=${this.secret}`;
-      
+
       const formData = new FormData();
       // ConvertAPI expects the file in the 'File' field
       const blob = new Blob([new Uint8Array(fileBuffer)]);
@@ -69,7 +75,10 @@ export class LibreOfficeService {
       // ConvertAPI returns a JSON with a Files array
       const result = response.data;
       if (!result.Files || result.Files.length === 0) {
-        throw new LibreOfficeConversionError("CONVERSION_FAILED", "ConvertAPI returned no files.");
+        throw new DocumentConversionError(
+          "CONVERSION_FAILED",
+          "ConvertAPI returned no files."
+        );
       }
 
       // The file data is returned as a Base64 string
@@ -77,14 +86,16 @@ export class LibreOfficeService {
       const pdfBytes = Buffer.from(base64Data, "base64");
 
       if (!this.looksLikePdf(pdfBytes)) {
-        throw new LibreOfficeConversionError(
+        throw new DocumentConversionError(
           "INVALID_OUTPUT",
           "ConvertAPI output is not a valid PDF."
         );
       }
 
       if (trace) {
-        console.log(`[LibreOfficeService] conversion completed trace=${trace} size=${pdfBytes.length}`);
+        console.log(
+          `[DocumentConversionService] conversion completed trace=${trace} size=${pdfBytes.length}`
+        );
       }
 
       return pdfBytes;
@@ -94,7 +105,7 @@ export class LibreOfficeService {
   }
 
   private mapError(error: any): Error {
-    if (error instanceof LibreOfficeConversionError) {
+    if (error instanceof DocumentConversionError) {
       return error;
     }
 
@@ -103,22 +114,40 @@ export class LibreOfficeService {
       // ConvertAPI often returns error details in JSON
       const message = error.response?.data?.Message || error.message;
 
-      console.error(`[LibreOfficeService] ConvertAPI error (${status}):`, message);
+      console.error(
+        `[DocumentConversionService] ConvertAPI error (${status}):`,
+        message
+      );
 
       if (status === 401) {
-        return new LibreOfficeConversionError("NO_BINARY", "Invalid ConvertAPI Secret.");
+        return new DocumentConversionError(
+          "NO_BINARY",
+          "Invalid ConvertAPI Secret."
+        );
       }
       if (status === 402) {
-        return new LibreOfficeConversionError("CONVERSION_FAILED", "ConvertAPI credit limit exceeded.");
+        return new DocumentConversionError(
+          "CONVERSION_FAILED",
+          "ConvertAPI credit limit exceeded."
+        );
       }
       if (status === 415 || status === 422) {
-        return new LibreOfficeConversionError("UNPROCESSABLE", "Unsupported file format or corrupted file.");
+        return new DocumentConversionError(
+          "UNPROCESSABLE",
+          "Unsupported file format or corrupted file."
+        );
       }
-      
-      return new LibreOfficeConversionError("CONVERSION_FAILED", `ConvertAPI error: ${message}`);
+
+      return new DocumentConversionError(
+        "CONVERSION_FAILED",
+        `ConvertAPI error: ${message}`
+      );
     }
 
-    return new LibreOfficeConversionError("CONVERSION_FAILED", error instanceof Error ? error.message : "Unknown error during conversion");
+    return new DocumentConversionError(
+      "CONVERSION_FAILED",
+      error instanceof Error ? error.message : "Unknown error during conversion"
+    );
   }
 
   private looksLikePdf(bytes: Buffer): boolean {

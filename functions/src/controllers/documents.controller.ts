@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import {
-  LibreOfficeConversionError,
-  LibreOfficeService,
-} from "../services/libreoffice.service.js";
+  DocumentConversionError,
+  DocumentConversionService,
+} from "../services/document-conversion.service.js";
 
 const allowedDocExtensions = [".doc", ".docx"];
 const allowedDocMimeTypes = [
@@ -12,7 +12,7 @@ const allowedDocMimeTypes = [
   "application/octet-stream",
 ];
 
-const libreOfficeService = new LibreOfficeService();
+const documentConversionService = new DocumentConversionService();
 
 const hasAllowedExtension = (fileName: string): boolean => {
   const lower = fileName.toLowerCase();
@@ -52,7 +52,7 @@ export const convertToPdf = async (
     }
 
     const trace = generateTrace();
-    const pdfBytes = await libreOfficeService.convertToPdfWithLibreOffice({
+    const pdfBytes = await documentConversionService.convertToPdf({
       fileBuffer: file.buffer,
       fileName: file.originalname,
       trace,
@@ -67,10 +67,10 @@ export const convertToPdf = async (
       "Content-Disposition",
       `attachment; filename="${outputName}"`
     );
-    res.setHeader("Gotenberg-Trace", trace);
+    res.setHeader("Conversion-Trace", trace);
     res.status(200).send(pdfBytes);
   } catch (error) {
-    if (error instanceof LibreOfficeConversionError) {
+    if (error instanceof DocumentConversionError) {
       switch (error.code) {
         case "TIMEOUT":
           res.status(503).json({
