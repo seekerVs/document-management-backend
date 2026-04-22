@@ -1,6 +1,6 @@
 import path from "node:path";
 // @ts-expect-error - wasmLoader lacks type declarations in the package but is required for initialization in this environment.
-import wasmLoader from "@matbee/libreoffice-converter/wasm/loader.cjs";
+import wasmLoader from "@matbee/libreoffice-converter/wasm/loader";
 import {
   createWorkerConverter,
   type ILibreOfficeConverter,
