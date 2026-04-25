@@ -56,11 +56,11 @@ app.get("/health", (_req, res) => {
 });
 
 // Public Guest Routes (No API Key)
-app.use("/v1/guest", guestRoutes);
-app.use("/storage", storageRoutes);
+app.use("/api/v1/guest", guestRoutes);
+app.use("/api/storage", storageRoutes);
 
 // API routes (all require x-api-key header)
-app.use(validateApiKey);
+app.use("/api", validateApiKey);
 app.use("/api/auth", authRoutes);
 app.use("/api/signing", signingRoutes);
 app.use("/api/documents", documentsRoutes);
@@ -78,4 +78,4 @@ if (!process.env.FUNCTION_TARGET) {
   });
 }
 
-export const api = onRequest(app);
+export const server = onRequest(app);
