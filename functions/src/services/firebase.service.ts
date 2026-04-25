@@ -17,10 +17,12 @@ export const initFirebase = (): void => {
 };
 
 export const getFirestore = (): Firestore => {
+  initFirebase();
   return adminGetFirestore();
 };
 
 export const getAuth = (): Auth => {
+  initFirebase();
   return adminGetAuth();
 };
 
