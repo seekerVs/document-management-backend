@@ -8,6 +8,7 @@ import guestRoutes from "./routes/guest.routes.js";
 import { initFirebase } from "./services/firebase.service.js";
 import storageRoutes from "./routes/storage.routes.js";
 import documentsRoutes from "./routes/documents.routes.js";
+import migrationRoutes from "./routes/migration.routes.js";
 import { onRequest } from "firebase-functions/v2/https";
 import { environment } from "./config/environment.js";
 
@@ -64,6 +65,7 @@ app.use("/api", validateApiKey);
 app.use("/api/auth", authRoutes);
 app.use("/api/signing", signingRoutes);
 app.use("/api/documents", documentsRoutes);
+app.use("/api/migration", migrationRoutes);
 
 // 404 handler
 app.use((_req, res) => {

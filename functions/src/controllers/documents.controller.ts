@@ -8,7 +8,6 @@ const allowedDocExtensions = [".doc", ".docx"];
 const allowedDocMimeTypes = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  // Some clients upload with generic MIME type; extension is still validated.
   "application/octet-stream",
 ];
 
