@@ -61,9 +61,9 @@ app.use("/storage", storageRoutes);
 
 // API routes (all require x-api-key header)
 app.use(validateApiKey);
-app.use("/auth", authRoutes);
-app.use("/signing", signingRoutes);
-app.use("/documents", documentsRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/signing", signingRoutes);
+app.use("/api/documents", documentsRoutes);
 
 // 404 handler
 app.use((_req, res) => {
