@@ -3,7 +3,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { NotificationRepository } from "./notification.service.js";
 import { ActivityService } from "./activity.service.js";
 
-const db = getFirestore();
 const notificationRepo = new NotificationRepository();
 const activityService = new ActivityService();
 
@@ -18,6 +17,7 @@ interface ContactData {
 
 export class ContactsService {
   async searchUsers(query: string): Promise<ContactData[]> {
+    const db = getFirestore();
     const normalized = query.trim().toLowerCase();
     if (!normalized) return [];
 
@@ -56,6 +56,7 @@ export class ContactsService {
   }
 
   async sendRequest(senderUid: string, targetUid: string): Promise<void> {
+    const db = getFirestore();
     if (senderUid === targetUid) throw new Error("Cannot send request to yourself");
 
     // Get sender data
@@ -122,6 +123,7 @@ export class ContactsService {
   }
 
   async acceptRequest(receiverUid: string, senderUid: string): Promise<void> {
+    const db = getFirestore();
     const receiverContactRef = db.collection("users").doc(receiverUid).collection("contacts").doc(senderUid);
     const senderContactRef = db.collection("users").doc(senderUid).collection("contacts").doc(receiverUid);
 
@@ -165,6 +167,7 @@ export class ContactsService {
   }
 
   async declineOrRemove(uidA: string, uidB: string): Promise<void> {
+    const db = getFirestore();
     const batch = db.batch();
     
     const contactRefA = db.collection("users").doc(uidA).collection("contacts").doc(uidB);
@@ -177,6 +180,7 @@ export class ContactsService {
   }
 
   async toggleFavorite(uid: string, contactUid: string): Promise<void> {
+    const db = getFirestore();
     const contactRef = db.collection("users").doc(uid).collection("contacts").doc(contactUid);
     
     const doc = await contactRef.get();
