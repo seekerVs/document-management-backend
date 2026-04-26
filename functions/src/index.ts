@@ -5,6 +5,7 @@ import { validateApiKey } from "./middleware/auth.middleware.js";
 import authRoutes from "./routes/auth.routes.js";
 import signingRoutes from "./routes/signing.routes.js";
 import guestRoutes from "./routes/guest.routes.js";
+import contactsRoutes from "./routes/contacts.routes.js";
 import { initFirebase } from "./services/firebase.service.js";
 import storageRoutes from "./routes/storage.routes.js";
 import documentsRoutes from "./routes/documents.routes.js";
@@ -64,6 +65,7 @@ app.use("/api", validateApiKey);
 app.use("/api/auth", authRoutes);
 app.use("/api/signing", signingRoutes);
 app.use("/api/documents", documentsRoutes);
+app.use("/api/contacts", contactsRoutes);
 
 // 404 handler
 app.use((_req, res) => {
