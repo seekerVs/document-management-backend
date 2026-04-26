@@ -64,6 +64,13 @@ export const createSignatureRequest = async (
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS);
 
+    const orderedNeedsToSign = signers
+      .filter((s) => s.role === "needsToSign")
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const firstSignerEmail = signingOrderEnabled
+      ? orderedNeedsToSign[0]?.signerEmail?.trim().toLowerCase()
+      : null;
+
     // Build signer list with tokens for needsToSign signers
     const signersWithTokens = signers.map((signer) => {
       if (signer.role !== "needsToSign") {
@@ -75,6 +82,24 @@ export const createSignatureRequest = async (
           tokenUsed: false,
         };
       }
+
+      const signerEmail = signer.signerEmail.trim().toLowerCase();
+      const shouldIssueToken =
+        !signingOrderEnabled || signerEmail === firstSignerEmail;
+
+      if (!shouldIssueToken) {
+        return {
+          ...signer,
+          status: "pending",
+          signingToken: null,
+          tokenExpiry: null,
+          tokenUsed: false,
+          signedAt: null,
+          signatureImageUrl: null,
+          ipAddress: null,
+        };
+      }
+
       const token = uuidv4();
       return {
         ...signer,
@@ -195,6 +220,27 @@ export const sendSigningLink = async (
 
   try {
     const db = getFirestore();
+
+    const requestDoc = await db.collection("signature_requests").doc(requestId).get();
+    if (requestDoc.exists) {
+      const requestData = requestDoc.data()!;
+      if (requestData.signingOrderEnabled) {
+        const signers = requestData.signers || [];
+        const pendingOrderedSigners = signers
+          .filter((s: any) => s.role === "needsToSign" && s.status === "pending")
+          .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+        
+        const currentTurnSigner = pendingOrderedSigners[0];
+        if (currentTurnSigner && currentTurnSigner.signerEmail.toLowerCase() !== signerEmail.toLowerCase()) {
+          res.status(400).json({
+            success: false,
+            message: "Cannot send signing link. It is not this signer's turn yet.",
+          });
+          return;
+        }
+      }
+    }
+
     const token = uuidv4();
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS);

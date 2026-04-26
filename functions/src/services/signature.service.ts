@@ -5,8 +5,12 @@ import { ActivityService } from "./activity.service.js";
 import { SignatureFieldPayload } from "../types/index.js";
 import { PdfService } from "./pdf.service.js";
 import { uploadToStorage } from "./supabase.service.js";
-import { sendDocumentCompletedEmail } from "./email.service.js";
+import {
+  sendDocumentCompletedEmail,
+  sendSigningLinkEmail,
+} from "./email.service.js";
 import { environment } from "../config/environment.js";
+import { v4 as uuidv4 } from "uuid";
 
 const notifRepo = new NotificationRepository();
 const activityService = new ActivityService();
@@ -19,7 +23,7 @@ const asFiniteNumber = (
 
 interface SignatureFieldRecord extends Record<string, unknown> {
   fieldId: string;
-  type?: "signature" | "initials" | "textbox";
+  type?: "signature" | "textbox";
   documentId?: string;
   page?: number;
   x?: number;
@@ -33,8 +37,12 @@ interface SignatureFieldRecord extends Record<string, unknown> {
 interface SignatureSigner extends Record<string, unknown> {
   signerEmail: string;
   signerName?: string;
+  order?: number;
   role?: "needsToSign" | "receivesACopy";
   status?: "pending" | "signed" | "declined";
+  signingToken?: string | null;
+  tokenExpiry?: Timestamp | null;
+  tokenUsed?: boolean;
   signatureImageUrl?: string;
   fields?: SignatureFieldRecord[];
   signerUid?: string;
@@ -114,6 +122,17 @@ export class SignatureService {
     const requestRef = db
       .collection("signature_requests")
       .doc(params.requestId);
+    let nextSignerDispatch:
+      | {
+          signerEmail: string;
+          signerName: string;
+          requesterName: string;
+          requesterEmail?: string;
+          message?: string;
+          documentName: string;
+          token: string;
+        }
+      | null = null;
 
     const dataForPdfGeneration = await db.runTransaction(
       async (transaction): Promise<PdfGenerationPayload | null> => {
@@ -125,6 +144,38 @@ export class SignatureService {
         const signers = (data.signers as SignatureSigner[]) || [];
         const ownerUid = data.requestedByUid;
         const documentName = data.documentName;
+        const signingOrderEnabled = data.signingOrderEnabled === true;
+        const signerEmailLower = params.signerEmail.toLowerCase();
+
+        const targetSigner = signers.find(
+          (s) => s.signerEmail.toLowerCase() === signerEmailLower
+        );
+
+        if (!targetSigner) {
+          throw new Error("Signer is not assigned to this request.");
+        }
+        if (targetSigner.role !== "needsToSign") {
+          throw new Error("Only signers with sign permission can sign.");
+        }
+        if (targetSigner.status !== "pending") {
+          throw new Error("This signer has already completed signing.");
+        }
+
+        if (signingOrderEnabled) {
+          const pendingOrderedSigners = signers
+            .filter(
+              (s) => s.role === "needsToSign" && s.status === "pending"
+            )
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+          const currentTurnSigner = pendingOrderedSigners[0];
+          if (
+            !currentTurnSigner ||
+            currentTurnSigner.signerEmail.toLowerCase() !== signerEmailLower
+          ) {
+            throw new Error("It is not this signer's turn to sign yet.");
+          }
+        }
 
         // 1. Update the specific signer's record
         const updatedSigners: SignatureSigner[] = signers.map(
@@ -153,6 +204,55 @@ export class SignatureService {
         const allSigned = updatedSigners
           .filter((s) => s.role === "needsToSign")
           .every((s) => s.status === "signed");
+
+        if (signingOrderEnabled && !allSigned) {
+          const nextPendingSigner = updatedSigners
+            .filter((s) => s.role === "needsToSign" && s.status === "pending")
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+
+          if (nextPendingSigner && !nextPendingSigner.signingToken) {
+            const nextToken = uuidv4();
+            const expiresAt = new Date();
+            expiresAt.setHours(expiresAt.getHours() + 72);
+
+            nextPendingSigner.signingToken = nextToken;
+            nextPendingSigner.tokenExpiry = Timestamp.fromDate(expiresAt);
+            nextPendingSigner.tokenUsed = false;
+
+            transaction.set(db.collection("signing_tokens").doc(nextToken), {
+              token: nextToken,
+              documentId: data.documentId,
+              requestId: params.requestId,
+              signerEmail: nextPendingSigner.signerEmail.trim().toLowerCase(),
+              expiresAt: Timestamp.fromDate(expiresAt),
+              used: false,
+              createdAt: FieldValue.serverTimestamp(),
+            });
+
+            const docs = (data.documents as SignatureDocument[] | undefined) ?? [
+              {
+                documentId: data.documentId,
+                documentName: data.documentName,
+                documentUrl: data.documentUrl,
+                storagePath: data.storagePath,
+              },
+            ];
+            const emailDocName =
+              docs.length > 1
+                ? `${docs[0].documentName} and ${docs.length - 1} other(s)`
+                : docs[0].documentName;
+
+            nextSignerDispatch = {
+              signerEmail: nextPendingSigner.signerEmail,
+              signerName: nextPendingSigner.signerName ?? "",
+              requesterName: data.requesterName || "Someone",
+              requesterEmail: data.requesterEmail,
+              message: data.message,
+              documentName: emailDocName,
+              token: nextToken,
+            };
+          }
+        }
 
         // 3. Commit state changes to Firestore
         transaction.update(requestRef, {
@@ -249,6 +349,26 @@ export class SignatureService {
         return payload;
       }
     );
+
+    if (nextSignerDispatch) {
+      try {
+        const signingUrl = `${environment.signingBaseUrl}/sign?token=${nextSignerDispatch.token}`;
+        await sendSigningLinkEmail(
+          nextSignerDispatch.signerEmail,
+          nextSignerDispatch.signerName,
+          nextSignerDispatch.requesterName,
+          nextSignerDispatch.documentName,
+          signingUrl,
+          nextSignerDispatch.requesterEmail,
+          nextSignerDispatch.message
+        );
+      } catch (error) {
+        console.error(
+          "[SignatureService] Failed to send next signer signing link:",
+          error
+        );
+      }
+    }
 
     // 5. Execute PDF Flattening outside the transaction to prevent timeouts
     if (dataForPdfGeneration) {

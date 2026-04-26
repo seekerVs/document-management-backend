@@ -10,7 +10,7 @@ interface FlattenParams {
 
 interface FlattenField {
   fieldId?: string;
-  type?: "signature" | "initials" | "textbox";
+  type?: "signature" | "textbox";
   documentId?: string;
   page?: number;
   x?: number;
@@ -195,7 +195,7 @@ export class PdfService {
           const topLeftY = normalizedY * pageH;
           const y = pageH - topLeftY - fieldH;
 
-          if (field.type === "signature" || field.type === "initials") {
+          if (field.type === "signature") {
             const imageRef =
               typeof field.value === "string" && field.value.trim().length > 0
                 ? field.value.trim()
