@@ -122,21 +122,23 @@ export class SignatureService {
     const requestRef = db
       .collection("signature_requests")
       .doc(params.requestId);
-    let nextSignerDispatch:
-      | {
-          signerEmail: string;
-          signerName: string;
-          requesterName: string;
-          requesterEmail?: string;
-          message?: string;
-          documentName: string;
-          token: string;
-        }
-      | null = null;
+    type NextSignerDispatch = {
+      signerEmail: string;
+      signerName: string;
+      requesterName: string;
+      requesterEmail?: string;
+      message?: string;
+      documentName: string;
+      token: string;
+    };
 
-    const dataForPdfGeneration = await db.runTransaction(
-      async (transaction): Promise<PdfGenerationPayload | null> => {
+    const transactionResult = await db.runTransaction(
+      async (transaction): Promise<{
+        payload: PdfGenerationPayload | null;
+        nextSignerDispatch: NextSignerDispatch | null;
+      }> => {
         let payload: PdfGenerationPayload | null = null;
+        let nextSignerDispatch: NextSignerDispatch | null = null;
         const snap = await transaction.get(requestRef);
         if (!snap.exists) throw new Error("Signature request not found.");
 
@@ -346,9 +348,12 @@ export class SignatureService {
             actorName: params.signerName,
           });
         }
-        return payload;
+        return { payload, nextSignerDispatch };
       }
     );
+
+    const dataForPdfGeneration = transactionResult.payload;
+    const nextSignerDispatch = transactionResult.nextSignerDispatch;
 
     if (nextSignerDispatch) {
       try {
