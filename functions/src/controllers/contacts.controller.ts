@@ -23,8 +23,7 @@ export const searchContacts = async (req: Request, res: Response): Promise<void>
 
 // POST /api/contacts/request
 export const sendRequest = async (req: Request, res: Response): Promise<void> => {
-  const senderUid = req.user?.uid;
-  const { targetUid } = req.body;
+  const { senderUid, targetUid } = req.body;
 
   if (!senderUid || !targetUid) {
     res.status(400).json({ success: false, message: "Missing sender or target UID." } as ApiResponse);
@@ -42,8 +41,7 @@ export const sendRequest = async (req: Request, res: Response): Promise<void> =>
 
 // POST /api/contacts/accept
 export const acceptRequest = async (req: Request, res: Response): Promise<void> => {
-  const receiverUid = req.user?.uid;
-  const { senderUid } = req.body;
+  const { receiverUid, senderUid } = req.body;
 
   if (!receiverUid || !senderUid) {
     res.status(400).json({ success: false, message: "Missing receiver or sender UID." } as ApiResponse);
@@ -62,8 +60,7 @@ export const acceptRequest = async (req: Request, res: Response): Promise<void> 
 // POST /api/contacts/decline
 // POST /api/contacts/remove
 export const declineOrRemove = async (req: Request, res: Response): Promise<void> => {
-  const uidA = req.user?.uid;
-  const { targetUid } = req.body;
+  const { uidA, targetUid } = req.body;
 
   if (!uidA || !targetUid) {
     res.status(400).json({ success: false, message: "Missing user UIDs." } as ApiResponse);
@@ -81,8 +78,7 @@ export const declineOrRemove = async (req: Request, res: Response): Promise<void
 
 // POST /api/contacts/favorite
 export const toggleFavorite = async (req: Request, res: Response): Promise<void> => {
-  const uid = req.user?.uid;
-  const { targetUid } = req.body;
+  const { uid, targetUid } = req.body;
 
   if (!uid || !targetUid) {
     res.status(400).json({ success: false, message: "Missing user UIDs." } as ApiResponse);

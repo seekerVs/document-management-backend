@@ -1,4 +1,4 @@
-import { getFirestore, getAuth } from "./firebase.service.js";
+import { getFirestore } from "./firebase.service.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { NotificationRepository } from "./notification.service.js";
 import { ActivityService } from "./activity.service.js";
