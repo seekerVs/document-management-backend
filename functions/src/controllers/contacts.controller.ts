@@ -7,13 +7,14 @@ const contactsService = new ContactsService();
 // GET /api/contacts/search?query=xxx
 export const searchContacts = async (req: Request, res: Response): Promise<void> => {
   const query = req.query.query as string;
+  const senderUid = req.query.senderUid as string | undefined;
   if (!query) {
     res.status(400).json({ success: false, message: "Query parameter is required." } as ApiResponse);
     return;
   }
 
   try {
-    const results = await contactsService.searchUsers(query);
+    const results = await contactsService.searchUsers(query, senderUid);
     res.status(200).json({ success: true, message: "Search complete", data: results });
   } catch (error: any) {
     console.error("[searchContacts] Error:", error);

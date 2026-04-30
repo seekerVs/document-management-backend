@@ -13,10 +13,12 @@ interface ContactData {
   email: string;
   photoUrl: string | null;
   bio: string | null;
+  status?: "pending" | "sent" | "accepted";
+  isFavorite?: boolean;
 }
 
 export class ContactsService {
-  async searchUsers(query: string): Promise<ContactData[]> {
+  async searchUsers(query: string, viewerUid?: string): Promise<ContactData[]> {
     const db = getFirestore();
     const normalized = query.trim().toLowerCase();
     if (!normalized) return [];
@@ -51,6 +53,30 @@ export class ContactsService {
 
     processDocs(byEmail.docs);
     processDocs(byUsername.docs);
+
+    if (viewerUid && results.length > 0) {
+      const enriched = await Promise.all(
+        results.map(async (contact) => {
+          const relationDoc = await db
+            .collection("users")
+            .doc(viewerUid)
+            .collection("contacts")
+            .doc(contact.uid)
+            .get();
+
+          if (!relationDoc.exists) return contact;
+
+          const relationData = relationDoc.data();
+          return {
+            ...contact,
+            status: relationData?.status,
+            isFavorite: relationData?.isFavorite ?? false,
+          };
+        }),
+      );
+
+      return enriched;
+    }
 
     return results;
   }
