@@ -20,12 +20,6 @@ const allowedOrigins = environment.allowedOrigins;
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    // Log the incoming origin for debugging
-    console.log(
-      `[CORS Request] Origin: ${origin || "No Origin (likely local/mobile)"}`
-    );
-    console.log(`[CORS Check] Allowed List: ${allowedOrigins.join(", ")}`);
-
     if (
       !origin ||
       allowedOrigins.includes(origin) ||

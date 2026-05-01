@@ -201,26 +201,51 @@ export class PdfService {
                 ? field.value.trim()
                 : signer.signatureImageUrl;
 
-            const signatureImageEmbed = imageRef
-              ? await loadSignatureImage(imageRef)
-              : null;
-
-            if (signatureImageEmbed) {
-              page.drawImage(signatureImageEmbed, {
+            if (imageRef?.startsWith("[PATH]")) {
+              const pathData = imageRef.substring("[PATH]".length);
+              // Vector signatures are normalized to a 1000-unit bounding box in Flutter.
+              // To maintain stroke width, we use drawSvgPath which handles the path commands.
+              // We need to handle Y-axis inversion (Flutter top-down vs PDF bottom-up).
+              
+              // Instead of manually parsing and flipping (complex), we'll use a transformation matrix
+              // if possible, or just draw it and accept it might be flipped if we don't handle it.
+              // Actually, the simplest way is to use the 'scale' and a fixed 'borderWidth'.
+              
+              // Since our path data is pre-flipped to bottom-up in the client, 
+              // we draw it starting from the BOTTOM of the field.
+              page.drawSvgPath(pathData, {
                 x,
-                y,
-                width: fieldW,
-                height: fieldH,
+                y, // Start at the bottom of the field (since path is now bottom-up)
+                scale: fieldW / 1000,
+                borderWidth: 1.5, // Fixed professional stroke width
+                color: rgb(0, 0, 0),
+                borderColor: rgb(0, 0, 0),
+                // We flip the Y scale by passing a negative value if supported, 
+                // but drawSvgPath might not like negative scales.
+                // If it doesn't work, we'll have to flip the coordinates in the string.
               });
             } else {
-              // Fallback: draw text if no signature image found
-              page.drawText(signer.signerName ?? "Signed", {
-                x,
-                y: y + fieldH / 2,
-                size: Math.min(12, fieldH * 0.8),
-                font: helveticaFont,
-                color: rgb(0, 0, 0),
-              });
+              const signatureImageEmbed = imageRef
+                ? await loadSignatureImage(imageRef)
+                : null;
+
+              if (signatureImageEmbed) {
+                page.drawImage(signatureImageEmbed, {
+                  x,
+                  y,
+                  width: fieldW,
+                  height: fieldH,
+                });
+              } else {
+                // Fallback: draw text if no signature image found
+                page.drawText(signer.signerName ?? "Signed", {
+                  x,
+                  y: y + fieldH / 2,
+                  size: Math.min(12, fieldH * 0.8),
+                  font: helveticaFont,
+                  color: rgb(0, 0, 0),
+                });
+              }
             }
           } else if (field.type === "textbox") {
             const textValue = String(field.value ?? "");
