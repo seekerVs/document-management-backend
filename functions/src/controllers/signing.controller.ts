@@ -186,6 +186,34 @@ export const createSignatureRequest = async (
     });
 
     await Promise.all(emailPromises);
+    
+    // Send in-app notifications to signers who have a UID
+    try {
+      const notifPromises = signersWithTokens.map(async (signer) => {
+        if (!signer.signerUid) return;
+
+        // If signing order is enabled, only notify the first signer.
+        // Others will be notified when it's their turn via SignatureService.
+        const signerEmailLower = signer.signerEmail.trim().toLowerCase();
+        const shouldNotify = !signingOrderEnabled || signerEmailLower === firstSignerEmail;
+
+        if (shouldNotify) {
+          await notifRepo.createNotification({
+            recipientUid: signer.signerUid,
+            type: "signatureRequest",
+            title: "New Signature Request",
+            body: `${requesterName} requested your signature on ${documents[0].documentName}.`,
+            requestId: requestId,
+            documentName: documents[0].documentName,
+            actorName: requesterName,
+          });
+        }
+      });
+
+      await Promise.all(notifPromises);
+    } catch (notifError) {
+      console.error("[createSignatureRequest] Notification Error (non-blocking):", notifError);
+    }
 
     res.status(200).json({
       success: true,

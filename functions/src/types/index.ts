@@ -66,6 +66,8 @@ export interface SignatureFieldPayload {
 export interface SignerPayload {
   signerEmail: string;
   signerName: string;
+  signerUid?: string;
+  photoUrl?: string;
   order: number;
   role: "needsToSign" | "receivesACopy";
   fields: SignatureFieldPayload[];

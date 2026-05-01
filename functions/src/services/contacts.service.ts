@@ -24,12 +24,21 @@ export class ContactsService {
     if (!normalized) return [];
 
     const usersRef = db.collection("users");
-    
-    // Search by emailLower
-    const byEmail = await usersRef.where("emailLower", "==", normalized).limit(1).get();
-    
-    // Search by usernameLower
-    const byUsername = await usersRef.where("usernameLower", "==", normalized).limit(1).get();
+    const prefixEnd = normalized + "\uf8ff";
+
+    // Prefix search by emailLower
+    const byEmail = await usersRef
+      .where("emailLower", ">=", normalized)
+      .where("emailLower", "<=", prefixEnd)
+      .limit(10)
+      .get();
+
+    // Prefix search by usernameLower
+    const byUsername = await usersRef
+      .where("usernameLower", ">=", normalized)
+      .where("usernameLower", "<=", prefixEnd)
+      .limit(10)
+      .get();
 
     const results: ContactData[] = [];
     const addedUids = new Set<string>();
