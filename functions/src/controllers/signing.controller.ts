@@ -458,6 +458,10 @@ export const submitSignature = async (
   } = req.body as SubmitSignatureRequest;
 
   try {
+    const db = getFirestore();
+    const requestDoc = await db.collection("signature_requests").doc(requestId).get();
+    const documentName = requestDoc.exists ? requestDoc.data()?.documentName : undefined;
+
     await signatureService.processSubmission({
       requestId,
       signerEmail,
@@ -465,6 +469,7 @@ export const submitSignature = async (
       updatedFields,
       signatureImageUrl,
       signerUid: signerUid ?? (req as RequestWithUser).user?.uid,
+      documentName,
     });
 
     res.status(200).json({
@@ -663,13 +668,16 @@ export const submitGuestSignature = async (
       return;
     }
 
+    const requestData = requestDoc.data()!;
+
     // Update request status and signer fields via centralized SignatureService
     await signatureService.processSubmission({
       requestId: tokenData.requestId,
       signerEmail: tokenData.signerEmail,
-      signerName: "", // Guest name might be empty or we can resolve it from requestData
+      signerName: requestData.signers.find((s: any) => s.signerEmail.toLowerCase() === tokenData.signerEmail.toLowerCase())?.signerName || "",
       updatedFields: signatures,
       ipAddress: req.ip,
+      documentName: requestData.documentName,
     });
 
     // Mark token as used
