@@ -240,11 +240,7 @@ export class PdfService {
                 y, // Start at the bottom of the field (since path is now bottom-up)
                 scale: fieldW / 1000,
                 borderWidth: 1.5, // Fixed professional stroke width
-                color: rgb(r, g, b),
                 borderColor: rgb(r, g, b),
-                // We flip the Y scale by passing a negative value if supported, 
-                // but drawSvgPath might not like negative scales.
-                // If it doesn't work, we'll have to flip the coordinates in the string.
               });
             } else {
               const signatureImageEmbed = imageRef
