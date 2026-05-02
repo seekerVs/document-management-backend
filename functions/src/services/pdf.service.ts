@@ -230,27 +230,38 @@ export class PdfService {
               
               const getPathBounds = (path: string) => {
                 const segments = path.split(/\s+/).filter(s => s.length > 0);
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                let minX = Infinity;
+                let minY = Infinity;
+                let maxX = -Infinity;
+                let maxY = -Infinity;
                 for (let i = 0; i < segments.length; i++) {
                   const s = segments[i];
                   if (s === "M" || s === "L") {
                     const px = parseFloat(segments[i + 1]);
                     const py = parseFloat(segments[i + 2]);
                     if (!isNaN(px) && !isNaN(py)) {
-                      minX = Math.min(minX, px); minY = Math.min(minY, py);
-                      maxX = Math.max(maxX, px); maxY = Math.max(maxY, py);
+                      minX = Math.min(minX, px);
+                      minY = Math.min(minY, py);
+                      maxX = Math.max(maxX, px);
+                      maxY = Math.max(maxY, py);
                     }
                     i += 2;
                   } else if (s === "Q") {
-                    const px1 = parseFloat(segments[i + 1]); const py1 = parseFloat(segments[i + 2]);
-                    const px2 = parseFloat(segments[i + 3]); const py2 = parseFloat(segments[i + 4]);
+                    const px1 = parseFloat(segments[i + 1]);
+                    const py1 = parseFloat(segments[i + 2]);
+                    const px2 = parseFloat(segments[i + 3]);
+                    const py2 = parseFloat(segments[i + 4]);
                     if (!isNaN(px1) && !isNaN(py1)) {
-                      minX = Math.min(minX, px1); minY = Math.min(minY, py1);
-                      maxX = Math.max(maxX, px1); maxY = Math.max(maxY, py1);
+                      minX = Math.min(minX, px1);
+                      minY = Math.min(minY, py1);
+                      maxX = Math.max(maxX, px1);
+                      maxY = Math.max(maxY, py1);
                     }
                     if (!isNaN(px2) && !isNaN(py2)) {
-                      minX = Math.min(minX, px2); minY = Math.min(minY, py2);
-                      maxX = Math.max(maxX, px2); maxY = Math.max(maxY, py2);
+                      minX = Math.min(minX, px2);
+                      minY = Math.min(minY, py2);
+                      maxX = Math.max(maxX, px2);
+                      maxY = Math.max(maxY, py2);
                     }
                     i += 4;
                   }
