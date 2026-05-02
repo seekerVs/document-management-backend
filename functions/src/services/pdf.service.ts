@@ -202,7 +202,27 @@ export class PdfService {
                 : signer.signatureImageUrl;
 
             if (imageRef?.startsWith("[PATH]")) {
-              const pathData = imageRef.substring("[PATH]".length);
+              let pathData = imageRef.substring("[PATH]".length);
+              
+              // Default to black
+              let r = 0, g = 0, b = 0;
+
+              // Check if path has embedded color (e.g. C:FF0000FF:M...)
+              if (pathData.startsWith("C:")) {
+                const parts = pathData.split(":");
+                if (parts.length >= 3) {
+                  const colorHex = parts[1];
+                  if (colorHex.length === 8) {
+                    // Flutter outputs AARRGGBB, we need to extract RGB
+                    r = parseInt(colorHex.substring(2, 4), 16) / 255;
+                    g = parseInt(colorHex.substring(4, 6), 16) / 255;
+                    b = parseInt(colorHex.substring(6, 8), 16) / 255;
+                  }
+                  // Remove the color prefix from the actual SVG path
+                  pathData = parts.slice(2).join(":");
+                }
+              }
+
               // Vector signatures are normalized to a 1000-unit bounding box in Flutter.
               // To maintain stroke width, we use drawSvgPath which handles the path commands.
               // We need to handle Y-axis inversion (Flutter top-down vs PDF bottom-up).
@@ -218,8 +238,8 @@ export class PdfService {
                 y, // Start at the bottom of the field (since path is now bottom-up)
                 scale: fieldW / 1000,
                 borderWidth: 1.5, // Fixed professional stroke width
-                color: rgb(0, 0, 0),
-                borderColor: rgb(0, 0, 0),
+                color: rgb(r, g, b),
+                borderColor: rgb(r, g, b),
                 // We flip the Y scale by passing a negative value if supported, 
                 // but drawSvgPath might not like negative scales.
                 // If it doesn't work, we'll have to flip the coordinates in the string.
