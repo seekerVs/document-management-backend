@@ -226,22 +226,52 @@ export class PdfService {
               }
 
               // Vector signatures are normalized to a 1000-unit bounding box in Flutter.
-              // To maintain stroke width, we use drawSvgPath which handles the path commands.
-              // We need to handle Y-axis inversion (Flutter top-down vs PDF bottom-up).
+              // To maintain visual parity with the app, we implement aspect-fit scaling and centering.
               
-              // Instead of manually parsing and flipping (complex), we'll use a transformation matrix
-              // if possible, or just draw it and accept it might be flipped if we don't handle it.
-              // Actually, the simplest way is to use the 'scale' and a fixed 'borderWidth'.
-              
-              // Since our path data is pre-flipped to bottom-up in the client, 
-              // we draw it starting from the BOTTOM of the field.
-              page.drawSvgPath(pathData, {
-                x,
-                y, // Start at the bottom of the field (since path is now bottom-up)
-                scale: fieldW / 1000,
-                borderWidth: 1.5, // Fixed professional stroke width
-                borderColor: rgb(r, g, b),
-              });
+              const getPathBounds = (path: string) => {
+                const segments = path.split(/\s+/).filter(s => s.length > 0);
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (let i = 0; i < segments.length; i++) {
+                  const s = segments[i];
+                  if (s === "M" || s === "L") {
+                    const px = parseFloat(segments[i + 1]);
+                    const py = parseFloat(segments[i + 2]);
+                    if (!isNaN(px) && !isNaN(py)) {
+                      minX = Math.min(minX, px); minY = Math.min(minY, py);
+                      maxX = Math.max(maxX, px); maxY = Math.max(maxY, py);
+                    }
+                    i += 2;
+                  } else if (s === "Q") {
+                    const px1 = parseFloat(segments[i + 1]); const py1 = parseFloat(segments[i + 2]);
+                    const px2 = parseFloat(segments[i + 3]); const py2 = parseFloat(segments[i + 4]);
+                    if (!isNaN(px1) && !isNaN(py1)) {
+                      minX = Math.min(minX, px1); minY = Math.min(minY, py1);
+                      maxX = Math.max(maxX, px1); maxY = Math.max(maxY, py1);
+                    }
+                    if (!isNaN(px2) && !isNaN(py2)) {
+                      minX = Math.min(minX, px2); minY = Math.min(minY, py2);
+                      maxX = Math.max(maxX, px2); maxY = Math.max(maxY, py2);
+                    }
+                    i += 4;
+                  }
+                }
+                return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+              };
+
+              const bounds = getPathBounds(pathData);
+              if (bounds.w > 0 && bounds.h > 0) {
+                const scale = Math.min(fieldW / bounds.w, fieldH / bounds.h);
+                const drawX = x + (fieldW - bounds.w * scale) / 2 - bounds.minX * scale;
+                const drawY = y + (fieldH - bounds.h * scale) / 2 - bounds.minY * scale;
+
+                page.drawSvgPath(pathData, {
+                  x: drawX,
+                  y: drawY,
+                  scale: scale,
+                  borderWidth: 1.5,
+                  borderColor: rgb(r, g, b),
+                });
+              }
             } else {
               const signatureImageEmbed = imageRef
                 ? await loadSignatureImage(imageRef)
