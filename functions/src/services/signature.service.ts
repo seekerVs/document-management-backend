@@ -395,10 +395,11 @@ export class SignatureService {
             totalDocuments: updatedDocuments.length,
           });
 
-          // Upload to a new path to preserve the original master document
+          // Upload to a new path to preserve the original master document.
+          // Include requestId to ensure uniqueness even if the same library file is used multiple times.
           const newStoragePath = doc.storagePath.replace(
             /\.pdf$/i,
-            "_completed.pdf"
+            `_completed_${dataForPdfGeneration.requestId}.pdf`
           );
           await uploadToStorage(buffer, newStoragePath, "application/pdf");
 

@@ -20,7 +20,7 @@ export const uploadToStorage = async (
     .from(BUCKET)
     .upload(storagePath, buffer, {
       contentType: mimeType,
-      upsert: false,
+      upsert: true,
     });
 
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
