@@ -205,7 +205,9 @@ export class PdfService {
               let pathData = imageRef.substring("[PATH]".length);
               
               // Default to black
-              let r = 0, g = 0, b = 0;
+              let r = 0;
+              let g = 0;
+              let b = 0;
 
               // Check if path has embedded color (e.g. C:FF0000FF:M...)
               if (pathData.startsWith("C:")) {

@@ -425,12 +425,19 @@ export class SignatureService {
         }
 
         // Keep storage accounting even though completed docs are no longer filed into Requests folders.
-        await db
-          .collection("users")
-          .doc(dataForPdfGeneration.requestedByUid)
-          .update({
-            usedStorageMB: FieldValue.increment(totalCompletedSizeMB),
-          });
+        try {
+          await db
+            .collection("users")
+            .doc(dataForPdfGeneration.requestedByUid)
+            .update({
+              usedStorageMB: FieldValue.increment(totalCompletedSizeMB),
+            });
+        } catch (storageError) {
+          console.warn(
+            `[SignatureService] Non-blocking storage accounting failure for user ${dataForPdfGeneration.requestedByUid}:`,
+            storageError
+          );
+        }
 
         // Update the Firestore database to point to the new flattened documents
         await requestRef.update({
@@ -444,35 +451,64 @@ export class SignatureService {
           `[SignatureService] All ${updatedDocuments.length} PDFs flattened and updated.`
         );
 
-        // Logic moved inside the loop above
-
         // 7. Send Completion Emails to all parties
         const baseUrl = environment.signingBaseUrl;
         const completedUrl = `${baseUrl}/completed/${dataForPdfGeneration.requestId}`;
 
-        // Send to Requester
-        if (dataForPdfGeneration.requesterEmail) {
-          await sendDocumentCompletedEmail(
-            dataForPdfGeneration.requesterEmail,
-            dataForPdfGeneration.requesterName,
-            dataForPdfGeneration.requesterName,
-            dataForPdfGeneration.documentName,
-            completedUrl
-          );
+        // Prepare email list and deduplicate by email address
+        const emailMap = new Map<string, { email: string; name: string }>();
+
+        // Add Requester
+        if (
+          dataForPdfGeneration.requesterEmail &&
+          dataForPdfGeneration.requesterEmail.trim().length > 0
+        ) {
+          const reqEmail = dataForPdfGeneration.requesterEmail.trim().toLowerCase();
+          emailMap.set(reqEmail, {
+            email: reqEmail,
+            name: dataForPdfGeneration.requesterName,
+          });
         }
 
-        // Send to all Signers (including CCs)
+        // Add all Signers (including CCs)
         for (const s of dataForPdfGeneration.updatedSigners) {
-          const signerEmail = s.signerEmail;
-          const signerName = s.signerName ?? "";
-          await sendDocumentCompletedEmail(
-            signerEmail,
-            signerName,
-            dataForPdfGeneration.requesterName,
-            dataForPdfGeneration.documentName,
-            completedUrl
-          );
+          const signerEmail = s.signerEmail?.trim().toLowerCase();
+          if (signerEmail && signerEmail.length > 0) {
+            // Only add if not already present to avoid double-sending to requester if they sign
+            if (!emailMap.has(signerEmail)) {
+              emailMap.set(signerEmail, {
+                email: signerEmail,
+                name: s.signerName ?? "",
+              });
+            }
+          }
         }
+
+        const recipients = Array.from(emailMap.values());
+        console.log(
+          `[SignatureService] Dispatching completion emails to ${recipients.length} recipients.`
+        );
+
+        // Send emails in parallel to ensure one failure doesn't block others
+        const emailPromises = recipients.map(async (recipient) => {
+          try {
+            await sendDocumentCompletedEmail(
+              recipient.email,
+              recipient.name,
+              dataForPdfGeneration.requesterName,
+              dataForPdfGeneration.documentName,
+              completedUrl
+            );
+            console.log(`[SignatureService] Completion email sent to ${recipient.email}`);
+          } catch (error) {
+            console.error(
+              `[SignatureService] Failed to send completion email to ${recipient.email}:`,
+              error
+            );
+          }
+        });
+
+        await Promise.allSettled(emailPromises);
       } catch (error) {
         console.error(
           "[SignatureService] Failed to generate flattened PDF:",
