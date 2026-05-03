@@ -1,10 +1,10 @@
 import Mailjet from "node-mailjet";
 import { environment } from "../config/environment.js";
 
-const mailjet = Mailjet.apiConnect(
-  environment.mailjetApiKeyPublic,
-  environment.mailjetApiKeyPrivate
-);
+const mailjet = new Mailjet({
+  apiKey: environment.mailjetApiKeyPublic,
+  apiSecret: environment.mailjetApiKeyPrivate,
+});
 
 const sender = () => ({
   Name: environment.emailFromName,
