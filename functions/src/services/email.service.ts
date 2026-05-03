@@ -1,7 +1,8 @@
-import { Client } from "node-mailjet";
+import Mailjet from "node-mailjet";
 import { environment } from "../config/environment.js";
 
-const mailjet = Client.apiConnect(
+// Cast to 'any' to bypass broken node-mailjet v6 TypeScript typings
+const mailjet = (Mailjet as any).apiConnect(
   environment.mailjetApiKeyPublic,
   environment.mailjetApiKeyPrivate
 );
