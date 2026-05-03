@@ -1,12 +1,28 @@
-import { BrevoClient } from "@getbrevo/brevo";
+import Mailjet from "node-mailjet";
 import { environment } from "../config/environment.js";
 
-const brevo = new BrevoClient({ apiKey: environment.brevoApiKey });
+const mailjet = Mailjet.apiConnect(
+  environment.mailjetApiKeyPublic,
+  environment.mailjetApiKeyPrivate
+);
 
 const sender = () => ({
-  name: environment.emailFromName,
-  email: environment.emailFromAddress,
+  Name: environment.emailFromName,
+  Email: environment.emailFromAddress,
 });
+
+const sendHtmlEmail = async (toEmail: string, subject: string, htmlContent: string) => {
+  await mailjet.post("send", { version: "v3.1" }).request({
+    Messages: [
+      {
+        From: sender(),
+        To: [{ Email: toEmail }],
+        Subject: subject,
+        HTMLPart: htmlContent,
+      },
+    ],
+  });
+};
 
 // Helper for the logo header
 const headerHtml = `
@@ -31,11 +47,10 @@ export const sendOtpEmail = async (
   otpCode: string,
   expiryMinutes: number
 ): Promise<void> => {
-  await brevo.transactionalEmails.sendTransacEmail({
-    sender: sender(),
-    to: [{ email: toEmail }],
-    subject: "Your password reset code",
-    htmlContent: `
+  await sendHtmlEmail(
+    toEmail,
+    "Your password reset code",
+    `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #141C23;">
         ${headerHtml}
         <div style="background: #141C23; border-radius: 8px 8px 0 0; padding: 40px 20px; text-align: center; color: #FFFFFF;">
@@ -49,8 +64,8 @@ export const sendOtpEmail = async (
         </div>
         ${footerHtml()}
       </div>
-    `,
-  });
+    `
+  );
 };
 
 // Send signing link email to a signer
@@ -63,11 +78,10 @@ export const sendSigningLinkEmail = async (
   requesterEmail?: string,
   message?: string
 ): Promise<void> => {
-  await brevo.transactionalEmails.sendTransacEmail({
-    sender: sender(),
-    to: [{ email: toEmail }],
-    subject: `${requesterName} sent you a document to review and sign`,
-    htmlContent: `
+  await sendHtmlEmail(
+    toEmail,
+    `${requesterName} sent you a document to review and sign`,
+    `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #141C23;">
         ${headerHtml}
         
@@ -87,8 +101,8 @@ export const sendSigningLinkEmail = async (
         
         ${footerHtml(requesterName)}
       </div>
-    `,
-  });
+    `
+  );
 };
 
 // Send copy notification email — no signing link
@@ -98,11 +112,10 @@ export const sendCopyEmail = async (
   requesterName: string,
   documentName: string
 ): Promise<void> => {
-  await brevo.transactionalEmails.sendTransacEmail({
-    sender: sender(),
-    to: [{ email: toEmail }],
-    subject: "You've been added as a copy recipient",
-    htmlContent: `
+  await sendHtmlEmail(
+    toEmail,
+    "You've been added as a copy recipient",
+    `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #141C23;">
         ${headerHtml}
         
@@ -119,8 +132,8 @@ export const sendCopyEmail = async (
         
         ${footerHtml(requesterName)}
       </div>
-    `,
-  });
+    `
+  );
 };
 
 // Send completed document link email
@@ -131,11 +144,10 @@ export const sendDocumentCompletedEmail = async (
   documentName: string,
   completedUrl: string
 ): Promise<void> => {
-  await brevo.transactionalEmails.sendTransacEmail({
-    sender: sender(),
-    to: [{ email: toEmail }],
-    subject: `Document Completed: ${documentName}`,
-    htmlContent: `
+  await sendHtmlEmail(
+    toEmail,
+    `Document Completed: ${documentName}`,
+    `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #141C23;">
         ${headerHtml}
         
@@ -153,6 +165,6 @@ export const sendDocumentCompletedEmail = async (
         
         ${footerHtml(requesterName)}
       </div>
-    `,
-  });
+    `
+  );
 };

@@ -20,7 +20,8 @@ const toNumber = (value: string | undefined, fallback: number): number => {
 export const environment = {
   allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS),
   apiSecretKey: process.env.API_SECRET_KEY ?? "",
-  brevoApiKey: process.env.BREVO_API_KEY ?? "",
+  mailjetApiKeyPublic: process.env.MAILJET_API_KEY_PUBLIC ?? "",
+  mailjetApiKeyPrivate: process.env.MAILJET_API_KEY_PRIVATE ?? "",
   emailFromName: process.env.EMAIL_FROM_NAME ?? "Scrivener",
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS ?? "",
   libreOfficeTimeoutMs: toNumber(process.env.LIBREOFFICE_TIMEOUT_MS, 45_000),
