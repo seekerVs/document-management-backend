@@ -1,6 +1,8 @@
 import Mailjet from "node-mailjet";
 import { environment } from "../config/environment.js";
 
+const EMAIL_LOGO_URL = "https://ursdkvwdcelfsemmpyam.supabase.co/storage/v1/object/public/assets/email_logo.png";
+
 // Cast to 'any' to bypass broken node-mailjet v6 TypeScript typings
 const mailjet = (Mailjet as any).apiConnect(
   environment.mailjetApiKeyPublic,
@@ -88,7 +90,7 @@ export const sendSigningLinkEmail = async (
         
         <div style="background: #141C23; border-radius: 8px 8px 0 0; padding: 40px 32px; text-align: center; color: #FFFFFF;">
           <div style="background: #FFFFFF; width: 48px; height: 48px; border-radius: 8px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; line-height: 48px;">
-            <img src="https://ursdkvwdcelfsemmpyam.supabase.co/storage/v1/object/public/assets/email_logo.png" alt="Scrivener Logo" style="width: 48px; height: auto;"/>
+            <img src="${EMAIL_LOGO_URL}" alt="Scrivener Logo" style="width: 48px; height: auto;"/>
           </div>
           <p style="font-size: 16px; margin: 0 0 24px;">${requesterName} sent you a document to review and sign.</p>
           <a href="${signingUrl}" style="display: inline-block; background: #279EFF; color: #FFFFFF; font-weight: bold; text-decoration: none; padding: 14px 32px; border-radius: 4px; font-size: 16px;">Review Document</a>
@@ -122,7 +124,7 @@ export const sendCopyEmail = async (
         
         <div style="background: #141C23; border-radius: 8px 8px 0 0; padding: 40px 32px; text-align: center; color: #FFFFFF;">
           <div style="background: #FFFFFF; width: 48px; height: 48px; border-radius: 8px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; line-height: 48px;">
-            <span style="font-size: 24px; color: #141C23;">&#x1F4C4;</span>
+            <img src="${EMAIL_LOGO_URL}" alt="Scrivener Logo" style="width: 48px; height: auto;"/>
           </div>
           <p style="font-size: 16px; margin: 0 0 8px;">${requesterName} added you as a copy recipient.</p>
           <p style="font-size: 14px; color: #D9E4EE; margin: 0;">You will receive the signed copy of <strong>${documentName}</strong> once all signatures are completed.</p>
@@ -154,7 +156,7 @@ export const sendDocumentCompletedEmail = async (
         
         <div style="background: #141C23; border-radius: 8px 8px 0 0; padding: 40px 32px; text-align: center; color: #FFFFFF;">
           <div style="background: #FFFFFF; width: 48px; height: 48px; border-radius: 8px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; line-height: 48px;">
-            <span style="font-size: 24px;">&#x2705;</span>
+            <img src="${EMAIL_LOGO_URL}" alt="Scrivener Logo" style="width: 48px; height: auto;"/>
           </div>
           <p style="font-size: 16px; margin: 0 0 24px;">The document <strong>${documentName}</strong> has been fully signed and is now complete.</p>
           <a href="${completedUrl}" style="display: inline-block; background: #279EFF; color: #FFFFFF; font-weight: bold; text-decoration: none; padding: 14px 32px; border-radius: 4px; font-size: 16px;">View Completed Document</a>

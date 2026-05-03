@@ -46,6 +46,71 @@ const normalizeDocRef = (value: unknown): string => {
   return withoutSuffix;
 };
 
+const getPathBounds = (path: string) => {
+  const segments = path.split(/\s+/).filter((s) => s.length > 0);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i];
+    if (s === "M" || s === "L") {
+      const px = parseFloat(segments[i + 1]);
+      const py = parseFloat(segments[i + 2]);
+      if (!isNaN(px) && !isNaN(py)) {
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
+      }
+      i += 2;
+    } else if (s === "Q") {
+      const px1 = parseFloat(segments[i + 1]);
+      const py1 = parseFloat(segments[i + 2]);
+      const px2 = parseFloat(segments[i + 3]);
+      const py2 = parseFloat(segments[i + 4]);
+      if (!isNaN(px1) && !isNaN(py1)) {
+        minX = Math.min(minX, px1);
+        minY = Math.min(minY, py1);
+        maxX = Math.max(maxX, px1);
+        maxY = Math.max(maxY, py1);
+      }
+      if (!isNaN(px2) && !isNaN(py2)) {
+        minX = Math.min(minX, px2);
+        minY = Math.min(minY, py2);
+        maxX = Math.max(maxX, px2);
+        maxY = Math.max(maxY, py2);
+      }
+      i += 4;
+    }
+  }
+  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+};
+
+const flipPathY = (path: string, minY: number, maxY: number) => {
+  const segments = path.split(/\s+/).filter((s) => s.length > 0);
+  const newSegments = [];
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i];
+    newSegments.push(s);
+    if (s === "M" || s === "L") {
+      newSegments.push(segments[i + 1]); // px
+      const py = parseFloat(segments[i + 2]);
+      newSegments.push((maxY + minY - py).toString());
+      i += 2;
+    } else if (s === "Q") {
+      newSegments.push(segments[i + 1]); // px1
+      const py1 = parseFloat(segments[i + 2]);
+      newSegments.push((maxY + minY - py1).toString());
+      newSegments.push(segments[i + 3]); // px2
+      const py2 = parseFloat(segments[i + 4]);
+      newSegments.push((maxY + minY - py2).toString());
+      i += 4;
+    }
+  }
+  return newSegments.join(" ");
+};
+
 export class PdfService {
   /**
    * Downloads the base PDF, embeds all fields/signatures, and returns the flattened PDF buffer.
@@ -227,55 +292,29 @@ export class PdfService {
 
               // Vector signatures are normalized to a 1000-unit bounding box in Flutter.
               // To maintain visual parity with the app, we implement aspect-fit scaling and centering.
-              
-              const getPathBounds = (path: string) => {
-                const segments = path.split(/\s+/).filter(s => s.length > 0);
-                let minX = Infinity;
-                let minY = Infinity;
-                let maxX = -Infinity;
-                let maxY = -Infinity;
-                for (let i = 0; i < segments.length; i++) {
-                  const s = segments[i];
-                  if (s === "M" || s === "L") {
-                    const px = parseFloat(segments[i + 1]);
-                    const py = parseFloat(segments[i + 2]);
-                    if (!isNaN(px) && !isNaN(py)) {
-                      minX = Math.min(minX, px);
-                      minY = Math.min(minY, py);
-                      maxX = Math.max(maxX, px);
-                      maxY = Math.max(maxY, py);
-                    }
-                    i += 2;
-                  } else if (s === "Q") {
-                    const px1 = parseFloat(segments[i + 1]);
-                    const py1 = parseFloat(segments[i + 2]);
-                    const px2 = parseFloat(segments[i + 3]);
-                    const py2 = parseFloat(segments[i + 4]);
-                    if (!isNaN(px1) && !isNaN(py1)) {
-                      minX = Math.min(minX, px1);
-                      minY = Math.min(minY, py1);
-                      maxX = Math.max(maxX, px1);
-                      maxY = Math.max(maxY, py1);
-                    }
-                    if (!isNaN(px2) && !isNaN(py2)) {
-                      minX = Math.min(minX, px2);
-                      minY = Math.min(minY, py2);
-                      maxX = Math.max(maxX, px2);
-                      maxY = Math.max(maxY, py2);
-                    }
-                    i += 4;
-                  }
-                }
-                return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
-              };
-
+              // The frontend intentionally scales vector signatures by 2.5x to overflow the small field box for better readability.
               const bounds = getPathBounds(pathData);
               if (bounds.w > 0 && bounds.h > 0) {
-                const scale = Math.min(fieldW / bounds.w, fieldH / bounds.h);
-                const drawX = x + (fieldW - bounds.w * scale) / 2 - bounds.minX * scale;
-                const drawY = y + (fieldH - bounds.h * scale) / 2 - bounds.minY * scale;
+                const visualScale = 2.5;
+                const renderW = fieldW * visualScale;
+                const renderH = fieldH * visualScale;
+                
+                const scale = Math.min(renderW / bounds.w, renderH / bounds.h);
 
-                page.drawSvgPath(pathData, {
+                // Flip the path data vertically relative to its bounding box.
+                // SVG coordinates (top-down) need to be inverted for PDF coordinates (bottom-up).
+                const flippedPathData = flipPathY(pathData, bounds.minY, bounds.maxY);
+
+                // Center the expanded render box over the original field box
+                const centerX = x + fieldW / 2;
+                const centerY = y + fieldH / 2;
+
+                const drawX =
+                  centerX - (bounds.w * scale) / 2 - bounds.minX * scale;
+                const drawY =
+                  centerY - (bounds.h * scale) / 2 - bounds.minY * scale;
+
+                (page as any).drawSvgPath(flippedPathData, {
                   x: drawX,
                   y: drawY,
                   scale: scale,
@@ -289,11 +328,15 @@ export class PdfService {
                 : null;
 
               if (signatureImageEmbed) {
+                // The frontend scales image signatures by 1.6x
+                const imgScale = 1.6;
+                const renderW = fieldW * imgScale;
+                const renderH = fieldH * imgScale;
                 page.drawImage(signatureImageEmbed, {
-                  x,
-                  y,
-                  width: fieldW,
-                  height: fieldH,
+                  x: x + (fieldW - renderW) / 2,
+                  y: y + (fieldH - renderH) / 2,
+                  width: renderW,
+                  height: renderH,
                 });
               } else {
                 // Fallback: draw text if no signature image found
