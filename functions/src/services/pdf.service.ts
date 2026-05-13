@@ -317,7 +317,7 @@ export class PdfService {
                 // Manual vertical offset adjustment (in points).
                 // Positive values move the signature UP, negative values move it DOWN.
                 // Adjust this value to manually fine-tune the vertical placement.
-                const manualYOffset = 70; 
+                const manualYOffset = 60; 
                 
                 const drawY =
                   centerY - (bounds.h * scale) / 2 - bounds.minY * scale + manualYOffset;
