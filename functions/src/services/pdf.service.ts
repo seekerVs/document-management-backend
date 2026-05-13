@@ -333,7 +333,9 @@ export class PdfService {
                 const imgScale = 1.8;
                 const renderW = fieldW * imgScale;
                 const renderH = fieldH * imgScale;
-                  const imageYOffset = fieldH * 0.08;
+                  // Increase upward nudge to better match client rendering
+                  // (the image often contains extra transparent padding).
+                  const imageYOffset = fieldH * 0.28;
                 page.drawImage(signatureImageEmbed, {
                   x: x + (fieldW - renderW) / 2,
                     y: y + (fieldH - renderH) / 2 + imageYOffset,
