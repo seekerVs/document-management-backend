@@ -305,14 +305,17 @@ export class PdfService {
                 // SVG coordinates (top-down) need to be inverted for PDF coordinates (bottom-up).
                 const flippedPathData = flipPathY(pathData, bounds.minY, bounds.maxY);
 
-                // Center the expanded render box over the original field box
+                // Center the signature on the field box midpoint (both axes).
+                // The 2.5x visual scale causes the signature to overflow the
+                // small field box, so we anchor to the center and let it
+                // extend equally in all directions — matching the client overlay.
                 const centerX = x + fieldW / 2;
-                const verticalSlack = Math.max(fieldH - bounds.h * scale, 0);
+                const centerY = y + fieldH / 2;
 
                 const drawX =
                   centerX - (bounds.w * scale) / 2 - bounds.minX * scale;
                 const drawY =
-                  y + verticalSlack / 2 - bounds.minY * scale;
+                  centerY - (bounds.h * scale) / 2 - bounds.minY * scale;
 
                 (page as any).drawSvgPath(flippedPathData, {
                   x: drawX,
