@@ -312,7 +312,7 @@ export class PdfService {
                 const drawX =
                   centerX - (bounds.w * scale) / 2 - bounds.minX * scale;
                 const drawY =
-                  y + verticalSlack - bounds.minY * scale;
+                  y + verticalSlack / 2 - bounds.minY * scale;
 
                 (page as any).drawSvgPath(flippedPathData, {
                   x: drawX,
