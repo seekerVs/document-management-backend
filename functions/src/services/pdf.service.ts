@@ -328,13 +328,15 @@ export class PdfService {
                 : null;
 
               if (signatureImageEmbed) {
-                // The frontend scales image signatures by 1.6x
-                const imgScale = 1.6;
+                // Match the guest viewer's image signature scale so the
+                // flattened placement lines up with the on-screen overlay.
+                const imgScale = 1.8;
                 const renderW = fieldW * imgScale;
                 const renderH = fieldH * imgScale;
+                  const imageYOffset = fieldH * 0.08;
                 page.drawImage(signatureImageEmbed, {
                   x: x + (fieldW - renderW) / 2,
-                  y: y + (fieldH - renderH) / 2,
+                    y: y + (fieldH - renderH) / 2 + imageYOffset,
                   width: renderW,
                   height: renderH,
                 });
