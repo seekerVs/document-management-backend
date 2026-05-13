@@ -307,12 +307,12 @@ export class PdfService {
 
                 // Center the expanded render box over the original field box
                 const centerX = x + fieldW / 2;
-                const centerY = y + fieldH / 2;
+                const verticalSlack = Math.max(fieldH - bounds.h * scale, 0);
 
                 const drawX =
                   centerX - (bounds.w * scale) / 2 - bounds.minX * scale;
                 const drawY =
-                  centerY - (bounds.h * scale) / 2 - bounds.minY * scale;
+                  y + verticalSlack * 0.8 - bounds.minY * scale;
 
                 (page as any).drawSvgPath(flippedPathData, {
                   x: drawX,
