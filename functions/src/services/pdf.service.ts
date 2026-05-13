@@ -314,8 +314,13 @@ export class PdfService {
 
                 const drawX =
                   centerX - (bounds.w * scale) / 2 - bounds.minX * scale;
+                // Manual vertical offset adjustment (in points).
+                // Positive values move the signature UP, negative values move it DOWN.
+                // Adjust this value to manually fine-tune the vertical placement.
+                const manualYOffset = 20; 
+                
                 const drawY =
-                  centerY - (bounds.h * scale) / 2 - bounds.minY * scale;
+                  centerY - (bounds.h * scale) / 2 - bounds.minY * scale + manualYOffset;
 
                 (page as any).drawSvgPath(flippedPathData, {
                   x: drawX,
